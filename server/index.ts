@@ -12,8 +12,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { Server, Socket } from "socket.io";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 import { RoomManager } from "./RoomManager";
 import { ClientToServerEvents, ServerToClientEvents } from "./types";
 import { CardType, PlayerId, TurnPhase } from "../src/types";
@@ -99,7 +98,7 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction): void
 }
 
 // ── Static Asset Serving for Custom Uploads ────────────────────
-const UPLOADS_DIR = path.resolve(__dirname, "public", "uploads");
+const UPLOADS_DIR = path.resolve(CURRENT_DIR, "public", "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
