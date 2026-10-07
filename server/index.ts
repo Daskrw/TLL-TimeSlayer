@@ -26,27 +26,36 @@ import {
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
 // ── P0 FIX #1: CORS Origin Whitelist ─────────────────────────
-// In production, set CLIENT_ORIGIN env var to your Vercel/CDN domain.
+// In production, set CLIENT_ORIGIN env var to your domain(s).
 // Multiple origins can be supplied as a comma-separated list.
-const rawOrigins = process.env.CLIENT_ORIGIN || "http://localhost:5299";
+const rawOrigins = process.env.CLIENT_ORIGIN || "";
 const allowedOrigins: string[] = rawOrigins
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean)
-  .concat(["http://localhost:5299", "http://127.0.0.1:5299"])
+  .concat([
+    "http://localhost:5299",
+    "http://127.0.0.1:5299",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+  ])
   .filter((v, i, a) => a.indexOf(v) === i); // deduplicate
 
 console.log(`[Server] Allowed CORS origins: ${allowedOrigins.join(", ")}`);
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    // Allow same-origin (no Origin header) and any whitelisted origin
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`[CORS] Blocked request from origin: ${origin}`);
-      callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
-    }
+    // 1. Same-origin / direct navigation (no Origin header)
+    if (!origin) return callback(null, true);
+
+    // 2. Whitelisted origins
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    // 3. In single-service production (e.g. Railway) without explicit CLIENT_ORIGIN set
+    if (!process.env.CLIENT_ORIGIN) return callback(null, true);
+
+    console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+    callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
   },
   credentials: true,
   methods: ["GET", "POST"],
@@ -96,7 +105,14 @@ const server = http.createServer(app);
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || !process.env.CLIENT_ORIGIN) {
+        callback(null, true);
+      } else {
+        console.warn(`[Socket.io CORS] Blocked origin: ${origin}`);
+        callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -881,6 +897,32 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
     }
   });
 });
+
+// ── Serve Frontend SPA in Production / Single-Service Mode ────
+const clientBuildPath = path.resolve(process.cwd(), "dist-client");
+if (process.env.NODE_ENV === "production" || fs.existsSync(clientBuildPath)) {
+  console.log(`[Server] Serving client assets from: ${clientBuildPath}`);
+  app.use(express.static(clientBuildPath));
+
+  // Fallback routing for SPA (Single Page Application)
+  app.get("*", (req: Request, res: Response, next: NextFunction): void => {
+    // Allow API, WebSocket, and upload routes to pass through
+    if (
+      req.path.startsWith("/api") ||
+      req.path.startsWith("/socket.io") ||
+      req.path.startsWith("/health") ||
+      req.path.startsWith("/uploads")
+    ) {
+      return next();
+    }
+    const indexFile = path.join(clientBuildPath, "index.html");
+    if (fs.existsSync(indexFile)) {
+      res.sendFile(indexFile);
+    } else {
+      next();
+    }
+  });
+}
 
 // ── Server Start ───────────────────────────────────────────────
 

@@ -508,11 +508,16 @@ export class MainMenu {
 
   private async checkServerHealth(): Promise<void> {
     try {
-      const res = await fetch("http://localhost:3001/health");
+      const isViteDev =
+        (window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1") &&
+        window.location.port === "5299";
+      const healthUrl = isViteDev ? "http://localhost:3001/health" : "/health";
+      const res = await fetch(healthUrl);
       if (res.ok) {
         this.serverStatusEl.innerHTML = `
           <div class="mm-server-dot"></div>
-          <span>Server: Ready (3001)</span>
+          <span>Server: Online</span>
         `;
       }
     } catch {

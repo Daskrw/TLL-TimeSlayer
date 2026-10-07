@@ -6,5 +6,5 @@ echo     - WebSocket Server: http://localhost:3001
 echo     - Vite Web Client:  http://localhost:5299
 echo ===================================================
 echo.
-npm start
+npm run start:dev
 pause

@@ -57,11 +57,14 @@ export class NetworkManager {
 
   private constructor() {
     if (typeof window !== "undefined") {
-      const isLocal =
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1";
-      // When accessed through Cloudflare Tunnel or external domain, connect via current origin (proxied by Vite)
-      this.serverUrl = isLocal
+      const isViteDev =
+        (window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1") &&
+        window.location.port === "5299";
+
+      // On Vite dev server (port 5299), connect to backend on 3001 or through Vite proxy.
+      // In production / Railway / single-service deployment, auto-detect window.location.origin.
+      this.serverUrl = isViteDev
         ? `http://${window.location.hostname}:3001`
         : window.location.origin;
     } else {

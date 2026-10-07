@@ -6,20 +6,22 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "start": "concurrently -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run server\" \"npm run dev\"",
+    "start": "tsx server/index.ts",
     "dev": "vite",
-    "server": "npx tsx server/index.ts",
-    "start:all": "concurrently -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run server\" \"npm run dev\"",
+    "dev:all": "concurrently -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run server\" \"npm run dev\"",
+    "start:dev": "concurrently -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run server\" \"npm run dev\"",
+    "server": "tsx server/index.ts",
+    "build": "vite build",
     "build:client": "vite build",
     "preview": "vite preview",
     "build:engine": "tsc",
-    "test": "npx tsx src/test.ts",
-    "test:bot": "npx tsx src/testBot.ts",
-    "test:engine": "npx tsx src/testEngine.ts",
-    "test:perspective": "npx tsx src/testPerspective.ts",
-    "test:cardsync": "npx tsx src/testCardSync.ts",
-    "test:server": "npx tsx server/testServer.ts",
-    "typecheck:server": "npx tsc --project tsconfig.server.json --noEmit"
+    "test": "tsx src/test.ts",
+    "test:bot": "tsx src/testBot.ts",
+    "test:engine": "tsx src/testEngine.ts",
+    "test:perspective": "tsx src/testPerspective.ts",
+    "test:cardsync": "tsx src/testCardSync.ts",
+    "test:server": "tsx server/testServer.ts",
+    "typecheck:server": "tsc --project tsconfig.server.json --noEmit"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -48,6 +50,7 @@
     "socket.io": "^4.8.4",
     "socket.io-client": "^4.8.4",
     "three": "^0.186.1",
+    "tsx": "^4.23.15",
     "uuid": "^14.0.2"
   }
 }
