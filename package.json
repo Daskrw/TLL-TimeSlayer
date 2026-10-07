@@ -1,0 +1,53 @@
+{
+  "name": "tll-timeslayer",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TLL TimeSlayer — 4-lane turn-based card game",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "start": "concurrently -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run server\" \"npm run dev\"",
+    "dev": "vite",
+    "server": "npx tsx server/index.ts",
+    "start:all": "concurrently -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run server\" \"npm run dev\"",
+    "build:client": "vite build",
+    "preview": "vite preview",
+    "build:engine": "tsc",
+    "test": "npx tsx src/test.ts",
+    "test:bot": "npx tsx src/testBot.ts",
+    "test:engine": "npx tsx src/testEngine.ts",
+    "test:perspective": "npx tsx src/testPerspective.ts",
+    "test:cardsync": "npx tsx src/testCardSync.ts",
+    "test:server": "npx tsx server/testServer.ts",
+    "typecheck:server": "npx tsc --project tsconfig.server.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0",
+    "vite": "^8.3.1"
+  },
+  "keywords": [
+    "card-game",
+    "typescript",
+    "game-engine",
+    "pvz"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "@types/three": "^0.186.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "gsap": "^3.15.0",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
+    "three": "^0.186.1",
+    "uuid": "^14.0.2"
+  }
+}

@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TLL TimeSlayer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Inter:wght@400;600;700&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #04060f;
+      overflow: hidden;
+      font-family: 'Inter', system-ui, sans-serif;
+      user-select: none;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: auto;
+      z-index: 1;
+    }
+    #canvas-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      pointer-events: auto !important;
+    }
+
+    /* ── HUD Overlay ─────────────────────────────────────────── */
+    #ui-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* Phase + Turn pill */
+    #phase-indicator {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(180deg, rgba(22, 14, 48, 0.92) 0%, rgba(10, 6, 24, 0.96) 100%);
+      border: 1.5px solid rgba(167, 139, 250, 0.5);
+      border-radius: 99px;
+      padding: 7px 26px;
+      color: #d8c8ff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      backdrop-filter: blur(16px);
+      white-space: nowrap;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(139, 92, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transition: color 0.3s, border-color 0.3s, box-shadow 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #phase-indicator span { color: #ffffff; font-weight: 800; text-shadow: 0 0 10px rgba(255, 255, 255, 0.4); }
+
+    /* Turn number */
+    #turn-label {
+      position: absolute;
+      top: 18px;
+      right: 22px;
+      background: linear-gradient(180deg, rgba(30, 20, 10, 0.9) 0%, rgba(15, 10, 5, 0.95) 100%);
+      border: 1.5px solid rgba(251, 191, 36, 0.5);
+      border-radius: 10px;
+      padding: 6px 16px;
+      color: #fbbf24;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), 0 0 14px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    /* Opponent Hand HUD Badge */
+    #opp-hand-hud {
+      position: absolute;
+      top: 18px;
+      left: 22px;
+      background: linear-gradient(180deg, rgba(20, 14, 42, 0.92) 0%, rgba(8, 5, 20, 0.96) 100%);
+      border: 1.5px solid rgba(167, 139, 250, 0.5);
+      border-radius: 99px;
+      padding: 6px 18px;
+      color: #d8c8ff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(139, 92, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      pointer-events: none;
+      z-index: 30;
+    }
+    #opp-hand-hud .opp-icon {
+      font-size: 17px;
+      filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.5));
+    }
+    #opp-hand-hud .opp-count {
+      color: #fbbf24;
+      font-size: 15px;
+      font-weight: 900;
+      text-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
+    }
+    #opp-hand-hud .opp-max {
+      color: rgba(216, 200, 255, 0.6);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* Mana Hub — bottom left corner */
+    #mana-container {
+      position: absolute;
+      bottom: 28px;
+      left: 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: linear-gradient(180deg, rgba(10, 22, 48, 0.94) 0%, rgba(4, 10, 26, 0.98) 100%);
+      border: 2px solid rgba(56, 189, 248, 0.6);
+      border-radius: 99px;
+      padding: 10px 22px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 24px rgba(56, 189, 248, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      pointer-events: none;
+      z-index: 30;
+    }
+    #mana-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #38bdf8;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+    }
+    #mana-val {
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 900;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+    #mana-display {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+    .mana-pip {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      transform: rotate(45deg);
+      border: 1.5px solid rgba(56, 189, 248, 0.4);
+      background: rgba(8, 20, 42, 0.8);
+      box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.8);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mana-pip.filled {
+      background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+      border-color: #e0f2fe;
+      box-shadow: 0 0 10px #38bdf8, 0 0 20px rgba(56, 189, 248, 0.8), inset 0 0 6px #ffffff;
+      transform: rotate(45deg) scale(1.15);
+    }
+
+    /* Action bar buttons — bottom right tactile controls */
+    #action-bar {
+      position: absolute;
+      right: 36px;
+      bottom: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 12px;
+      pointer-events: all;
+      z-index: 30;
+    }
+    .btn {
+      padding: 14px 34px;
+      border-radius: 99px;
+      border: 2px solid rgba(167, 139, 250, 0.7);
+      background: linear-gradient(180deg, rgba(55, 30, 110, 0.95) 0%, rgba(25, 12, 55, 0.98) 100%);
+      color: #f1f5f9;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      backdrop-filter: blur(14px);
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      text-transform: uppercase;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 18px rgba(139, 92, 246, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+    .btn:hover:not(:disabled) {
+      background: linear-gradient(180deg, rgba(88, 45, 180, 0.98) 0%, rgba(45, 20, 95, 0.98) 100%);
+      border-color: #d8b4fe;
+      color: #ffffff;
+      box-shadow: 0 10px 32px rgba(139, 92, 246, 0.6), 0 0 26px rgba(192, 132, 252, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px) scale(1.03);
+    }
+    .btn:active:not(:disabled) {
+      transform: translateY(3px) scale(0.95);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.8), inset 0 2px 6px rgba(0, 0, 0, 0.6);
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      filter: grayscale(0.7);
+      transform: none;
+      box-shadow: none;
+    }
+    .btn.primary {
+      border-color: rgba(251, 191, 36, 0.9);
+      background: linear-gradient(180deg, rgba(140, 80, 10, 0.98) 0%, rgba(70, 35, 4, 0.98) 100%);
+      color: #fef08a;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(245, 158, 11, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      animation: pulse-combat 2s infinite ease-in-out;
+    }
+    .btn.primary:hover:not(:disabled) {
+      background: linear-gradient(180deg, rgba(200, 115, 15, 0.98) 0%, rgba(100, 50, 5, 0.98) 100%);
+      border-color: #fef08a;
+      color: #ffffff;
+      box-shadow: 0 10px 36px rgba(245, 158, 11, 0.8), 0 0 32px rgba(253, 224, 71, 0.7);
+      transform: translateY(-2px) scale(1.04);
+    }
+    @keyframes pulse-combat {
+      0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 18px rgba(245, 158, 11, 0.4); }
+      50%      { box-shadow: 0 10px 34px rgba(0, 0, 0, 0.7), 0 0 32px rgba(251, 191, 36, 0.8); }
+    }
+
+    /* Toast messages */
+    #toast {
+      position: absolute;
+      top: 62px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(20, 10, 40, 0.9);
+      border: 1px solid rgba(200, 100, 100, 0.5);
+      border-radius: 8px;
+      padding: 8px 20px;
+      color: #ffaaaa;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      white-space: nowrap;
+    }
+    #toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Bot thinking indicator */
+    #bot-thinking {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(5, 5, 20, 0.92);
+      border: 1px solid rgba(120, 80, 255, 0.4);
+      border-radius: 12px;
+      padding: 14px 30px;
+      color: #a890ff;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      display: none;
+      backdrop-filter: blur(12px);
+    }
+    #bot-thinking.visible { display: block; }
+    #bot-thinking::after {
+      content: '...';
+      animation: dots 1.2s infinite;
+    }
+    @keyframes dots {
+      0%,20%  { content: '.'; }
+      40%     { content: '..'; }
+      60%,100%{ content: '...'; }
+    }
+
+    /* Game over screen */
+    #game-over {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      display: none;
+    }
+    #game-over.visible { display: flex; }
+    #game-over h1 {
+      font-size: 56px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-shadow: 0 0 40px currentColor;
+      margin-bottom: 16px;
+    }
+    #game-over h1.win { color: #ffd066; }
+    #game-over h1.lose { color: #ff6666; }
+    #game-over h1.draw { color: #aaaaff; }
+    #game-over .sub { color: rgba(255,255,255,0.5); font-size: 16px; margin-bottom: 28px; }
+    #game-over .btn { pointer-events: all; }
+
+    /* Card tooltip */
+    #card-tooltip {
+      position: absolute;
+      background: rgba(8, 6, 22, 0.95);
+      border: 1px solid rgba(160, 120, 255, 0.4);
+      border-radius: 10px;
+      padding: 10px 14px;
+      pointer-events: none;
+      max-width: 200px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      backdrop-filter: blur(8px);
+    }
+    #card-tooltip.visible { opacity: 1; }
+    #card-tooltip .tt-name { color: #fff; font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    #card-tooltip .tt-text { color: rgba(200,185,255,0.8); font-size: 12px; line-height: 1.45; }
+    #card-tooltip .tt-stats { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; }
+    #card-tooltip .tt-atk { color: #ff8844; font-weight: 700; }
+    #card-tooltip .tt-hp  { color: #44ff88; font-weight: 700; }
+    #card-tooltip .tt-cost{ color: #ffcc44; font-weight: 700; }
+    /* ── Big Card Preview Panel (Pinned on Left Screen) ──────── */
+    #big-card-preview {
+      position: absolute;
+      left: 28px;
+      top: 50%;
+      transform: translateY(-50%) translateX(-20px);
+      width: 295px;
+      min-height: 430px;
+      background: linear-gradient(155deg, rgba(20, 14, 42, 0.96) 0%, rgba(8, 5, 20, 0.98) 100%);
+      border: 2px solid var(--prev-border, rgba(168, 85, 247, 0.55));
+      border-radius: 18px;
+      padding: 14px 16px 16px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px var(--prev-glow, rgba(147, 51, 234, 0.35));
+      backdrop-filter: blur(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s, box-shadow 0.2s;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      user-select: none;
+    }
+    #big-card-preview.visible {
+      opacity: 1;
+      transform: translateY(-50%) translateX(0);
+    }
+    .prev-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+    .prev-cost-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ffffff 0%, var(--cost-color, #38bdf8) 60%, #0369a1 100%);
+      border: 2px solid #ffffff;
+      color: #040817;
+      font-size: 17px;
+      font-weight: 900;
+      box-shadow: 0 0 14px var(--cost-color, #38bdf8);
+      flex-shrink: 0;
+    }
+    .prev-tribe-badge {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--prev-border, rgba(168, 85, 247, 0.4));
+      color: #f3e8ff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .prev-identity {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .prev-name {
+      font-family: 'Cinzel Decorative', Georgia, serif;
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.2;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .prev-meta {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #cbd5e1;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .prev-art {
+      width: 100%;
+      height: 155px;
+      border-radius: 12px;
+      background: radial-gradient(circle at center, rgba(60, 40, 110, 0.8), rgba(15, 10, 30, 0.98));
+      border: 1.5px solid var(--prev-border, rgba(168, 85, 247, 0.4));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.7), 0 4px 14px rgba(0, 0, 0, 0.45);
+      text-shadow: 0 0 16px rgba(180, 140, 255, 0.6);
+      user-select: none;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .prev-keywords {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .kw-tag {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: rgba(147, 51, 234, 0.25);
+      border: 1px solid rgba(192, 132, 252, 0.45);
+      color: #fef08a;
+      text-transform: uppercase;
+    }
+    .prev-body {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+      color: #e2e8f0;
+      line-height: 1.5;
+      min-height: 50px;
+    }
+    .prev-body .kw-highlight {
+      color: #ffd066;
+      font-weight: 800;
+    }
+    .prev-stats {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: auto;
+      padding-top: 2px;
+    }
+    .stat-badge {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 17px;
+      font-weight: 900;
+      padding: 6px 12px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    .stat-atk {
+      background: rgba(220, 38, 38, 0.22);
+      border: 1.5px solid #ef4444;
+      color: #fca5a5;
+    }
+    .stat-hp {
+      background: rgba(34, 197, 94, 0.22);
+      border: 1.5px solid #22c55e;
+      color: #86efac;
+    }
+
+    /* ── Super Block Modal ────────────────────────────────────── */
+    #super-block-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 2, 10, 0.85);
+      backdrop-filter: blur(12px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      pointer-events: all;
+    }
+    #super-block-modal.visible {
+      display: flex;
+      animation: modal-fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modal-fade-in {
+      from { opacity: 0; transform: scale(0.94); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .sb-dialog {
+      width: 440px;
+      background: linear-gradient(160deg, #181030, #0a0618);
+      border: 2px solid #ffd066;
+      border-radius: 24px;
+      padding: 28px 24px;
+      box-shadow: 0 0 60px rgba(255, 208, 102, 0.4), 0 20px 40px rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 16px;
+      position: relative;
+    }
+    .sb-badge {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      color: #ffd066;
+      text-transform: uppercase;
+      background: rgba(255, 208, 102, 0.15);
+      border: 1px solid rgba(255, 208, 102, 0.4);
+      padding: 6px 18px;
+      border-radius: 99px;
+      animation: pulse-badge 1.5s infinite;
+    }
+    @keyframes pulse-badge {
+      0%, 100% { box-shadow: 0 0 10px rgba(255, 208, 102, 0.2); }
+      50%      { box-shadow: 0 0 24px rgba(255, 208, 102, 0.7); }
+    }
+    .sb-title {
+      font-family: 'Cinzel Decorative', Georgia, serif;
+      font-size: 26px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.1;
+      text-shadow: 0 0 20px #ffd066;
+    }
+    .sb-subtitle {
+      font-size: 13px;
+      color: #cbb8ff;
+      line-height: 1.45;
+      max-width: 360px;
+    }
+    .sb-card-frame {
+      width: 240px;
+      background: linear-gradient(145deg, #241648, #100826);
+      border: 2px solid #8c64ff;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(140, 100, 255, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+    }
+    .sb-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sb-card-cost {
+      background: #ffd066;
+      color: #000;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 2px 8px;
+      border-radius: 99px;
+    }
+    .sb-card-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .sb-card-desc {
+      font-size: 12px;
+      color: #ddd4ff;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 8px;
+      padding: 8px;
+      line-height: 1.4;
+    }
+    .sb-actions {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      margin-top: 6px;
+    }
+    .sb-actions .btn {
+      flex: 1;
+      padding: 12px 14px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="ui-overlay">
+    <div id="opp-hand-hud">
+      <span class="opp-icon">🎴</span>
+      <span>Enemy Cards: <strong class="opp-count" id="opp-card-count">4</strong><span class="opp-max">/11</span></span>
+    </div>
+    <div id="phase-indicator">Turn <span id="turn-num">1</span> &nbsp;·&nbsp; <span id="phase-name">Setup</span></div>
+    <div id="turn-label">TURN 1</div>
+    <button id="btn-in-game-menu" title="Return to Main Menu" style="position: absolute; top: 18px; right: 195px; background: rgba(18, 14, 38, 0.85); border: 1px solid rgba(160, 100, 255, 0.45); border-radius: 8px; padding: 5px 12px; color: #d8c8ff; font-size: 12px; font-weight: 700; cursor: pointer; pointer-events: all; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 30; transition: all 0.2s;">
+      <span>🏠</span><span>Menu</span>
+    </button>
+    <button id="btn-admin-cms" title="Card Management System (Ctrl+Shift+A or #admin)" style="position: absolute; top: 18px; right: 110px; background: rgba(18, 14, 38, 0.85); border: 1px solid rgba(160, 100, 255, 0.45); border-radius: 8px; padding: 5px 12px; color: #d8c8ff; font-size: 12px; font-weight: 700; cursor: pointer; pointer-events: all; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 30; transition: all 0.2s;">
+      <span>🛠️</span><span>CMS</span>
+    </button>
+
+    <div id="action-bar">
+      <button class="btn" id="btn-pass-phase">End Phase</button>
+      <button class="btn primary" id="btn-resolve-combat" style="display:none">⚔ Resolve Combat</button>
+    </div>
+
+    <div id="mana-container">
+      <div id="mana-label">💧 <span id="mana-val">1 / 1</span></div>
+      <div id="mana-display"></div>
+    </div>
+
+    <!-- Pinned Big Card Preview Panel -->
+    <div id="big-card-preview">
+      <div class="prev-header">
+        <div class="prev-cost-badge" id="prev-cost">1</div>
+        <div class="prev-tribe-badge" id="prev-tribe">Aerial</div>
+      </div>
+      <div class="prev-identity">
+        <div class="prev-name" id="prev-name">Sky Scout</div>
+        <div class="prev-meta" id="prev-meta">Unit · Aerial</div>
+      </div>
+      <div class="prev-art" id="prev-art">🦅</div>
+      <div class="prev-keywords" id="prev-keywords"></div>
+      <div class="prev-body" id="prev-text">Card ability description goes here.</div>
+      <div class="prev-stats" id="prev-stats">
+        <div class="stat-badge stat-atk">⚔ <span id="prev-atk">1</span></div>
+        <div class="stat-badge stat-hp">❤ <span id="prev-hp">2</span></div>
+      </div>
+    </div>
+
+    <!-- Super Block Interrupt Modal -->
+    <div id="super-block-modal">
+      <div class="sb-dialog">
+        <div class="sb-badge">🛡️ SUPER BLOCK ACTIVATED! 🛡️</div>
+        <div class="sb-title">DAMAGE NEGATED!</div>
+        <div class="sb-subtitle" id="sb-subtitle">An unblocked attack was blocked! Choose how to wield your Superpower:</div>
+        <div class="sb-card-frame">
+          <div class="sb-card-header">
+            <span class="sb-card-name" id="sb-card-name">Superpower</span>
+            <span class="sb-card-cost" id="sb-card-cost">0 Mana</span>
+          </div>
+          <div class="sb-card-desc" id="sb-card-desc">Description</div>
+        </div>
+        <div class="sb-actions">
+          <button class="btn primary" id="sb-btn-cast">⚡ Play Now (0 Cost)</button>
+          <button class="btn" id="sb-btn-keep">📥 Keep to Hand</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="bot-thinking">Bot is thinking</div>
+
+    <div id="card-tooltip" style="display:none;"></div>
+
+    <div id="game-over">
+      <h1 id="go-title" class="win">VICTORY</h1>
+      <div class="sub" id="go-sub">The battlefield is yours.</div>
+      <button class="btn primary" onclick="location.reload()">Play Again</button>
+    </div>
+  </div>
+
+  <script type="module" src="/client/main.ts"></script>
+</body>
+</html>

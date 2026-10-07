@@ -1,0 +1,997 @@
+{
+  "version": 1,
+  "updatedAt": 1791376792163,
+  "heroes": [
+    {
+      "id": "HERO_SKY_VANGUARD",
+      "name": "Valen",
+      "title": "The Sky Vanguard",
+      "description": "Master of high-altitude aerial tactics and whirlwind momentum. Strikes fast and hard from above before foes can react.",
+      "maxHp": 20,
+      "portraitUrl": "🦅",
+      "allowedTribes": [
+        "จู่โจม",
+        "ยุทธศาสตร์",
+        "จอมพล"
+      ],
+      "signatureAbilityCardId": "SP_SKY_STRIKE",
+      "coreAbilityCardIds": [
+        "SP_AERIAL_SURGE",
+        "SP_TAILWIND_DRAFT",
+        "SP_GLACIAL_GALE"
+      ],
+      "updatedAt": 0
+    },
+    {
+      "id": "HERO_ABYSSAL_SORCERER",
+      "name": "Nereus",
+      "title": "Abyssal Sorcerer",
+      "description": "Ancient mystic commanding the deepest oceanic trenches. Submerges the entire battlefield in roaring tidal waves while sustaining allies.",
+      "maxHp": 20,
+      "portraitUrl": "🌊",
+      "allowedTribes": [
+        "จอมอาคม",
+        "ปัญญา",
+        "รักษา"
+      ],
+      "signatureAbilityCardId": "SP_TIDAL_WAVE",
+      "coreAbilityCardIds": [
+        "SP_SOOTHING_CURRENT",
+        "SP_CORAL_AEGIS",
+        "SP_AQUATIC_CONJURATION"
+      ],
+      "updatedAt": 0
+    },
+    {
+      "id": "HERO_SOLAR_FLARE",
+      "name": "Solar Flare",
+      "title": "The Solar Vanguard",
+      "description": "Radiant flame specialist who incinerates threats with blistering solar bursts and fiery energy.",
+      "maxHp": 20,
+      "portraitUrl": "🌻",
+      "allowedTribes": [
+        "รักษา",
+        "จู่โจม",
+        "จอมอาคม"
+      ],
+      "signatureAbilityCardId": "SP_SUNBURN",
+      "coreAbilityCardIds": [
+        "SP_WEED_WHACKER",
+        "SP_MORE_SPORE",
+        "SP_SUN_BURST"
+      ],
+      "updatedAt": 0
+    },
+    {
+      "id": "HERO_SUPER_BRAINZ",
+      "name": "Super Brainz",
+      "title": "Psionic Mastermind",
+      "description": "Cerebral powerhouse wielding psionic disruption, telekinesis, and overwhelming brute force.",
+      "maxHp": 20,
+      "portraitUrl": "🧠",
+      "allowedTribes": [
+        "ปัญญา",
+        "พิทักษ์",
+        "ยุทธศาสตร์"
+      ],
+      "signatureAbilityCardId": "SP_TELEPATHY",
+      "coreAbilityCardIds": [
+        "SP_CARRIED_AWAY",
+        "SP_SUPER_STENCH",
+        "SP_CUT_DOWN_TO_SIZE"
+      ],
+      "updatedAt": 0
+    }
+  ],
+  "cards": [
+    {
+      "id": "CARD_SUNFLOWER",
+      "name": "Sunflower",
+      "type": "UNIT",
+      "cost": 1,
+      "attack": 1,
+      "hp": 2,
+      "tribes": [
+        "รักษา"
+      ],
+      "tribe": "รักษา",
+      "keywords": [],
+      "text": "A cheerful healer. (No keywords — basic vanilla unit.)",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_PEASHOOTER",
+      "name": "Peashooter",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 2,
+      "hp": 2,
+      "tribes": [
+        "จอมพล"
+      ],
+      "tribe": "จอมพล",
+      "keywords": [
+        "จู่โจม"
+      ],
+      "text": "Fires immediately upon planting.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_WALL_NUT",
+      "name": "Wall-nut",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 0,
+      "hp": 5,
+      "tribes": [
+        "พิทักษ์"
+      ],
+      "tribe": "พิทักษ์",
+      "keywords": [],
+      "text": "A sturdy wall. Low attack, very high HP.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_BONK_CHOY",
+      "name": "Bonk Choy",
+      "type": "UNIT",
+      "cost": 3,
+      "attack": 3,
+      "hp": 3,
+      "tribes": [
+        "จู่โจม"
+      ],
+      "tribe": "จู่โจม",
+      "keywords": [
+        "โจมตีต่อเนื่อง"
+      ],
+      "text": "Punches twice! Hits the opposing unit twice in combat.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_CHOMPER",
+      "name": "Chomper",
+      "type": "UNIT",
+      "cost": 3,
+      "attack": 4,
+      "hp": 2,
+      "tribes": [
+        "จู่โจม"
+      ],
+      "tribe": "จู่โจม",
+      "keywords": [
+        "เกลียดชังตำนาน"
+      ],
+      "text": "Bites through — deals damage to both the unit and the hero behind it.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_TALLNUT",
+      "name": "Tall-nut",
+      "type": "UNIT",
+      "cost": 4,
+      "attack": 1,
+      "hp": 8,
+      "tribes": [
+        "พิทักษ์"
+      ],
+      "tribe": "พิทักษ์",
+      "keywords": [
+        "DEATHRATTLE"
+      ],
+      "text": "When Tall-nut is destroyed, it leaves behind a Wall-nut (effect handled by deathrattle registry).",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_HOMING_THISTLE",
+      "name": "Homing Thistle",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 2,
+      "hp": 1,
+      "tribes": [
+        "ปัญญา"
+      ],
+      "tribe": "ปัญญา",
+      "keywords": [
+        "อากาศยาน",
+        "จู่โจม"
+      ],
+      "text": "A flying plant that strikes the moment it lands.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_ROTOBAGA",
+      "name": "Rotobaga",
+      "type": "UNIT",
+      "cost": 3,
+      "attack": 2,
+      "hp": 3,
+      "tribes": [
+        "ยุทธศาสตร์"
+      ],
+      "tribe": "ยุทธศาสตร์",
+      "keywords": [
+        "อากาศยาน",
+        "เกลียดชังตำนาน"
+      ],
+      "text": "Flies above the battlefield and pierces through everything below.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_AIR_RAID_ZOMBIE",
+      "name": "Air Raid Zombie",
+      "type": "UNIT",
+      "cost": 4,
+      "attack": 4,
+      "hp": 3,
+      "tribes": [
+        "จอมพล"
+      ],
+      "tribe": "จอมพล",
+      "keywords": [
+        "อากาศยาน",
+        "โจมตีต่อเนื่อง"
+      ],
+      "text": "An airborne zombie that strikes twice.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_LILY_PAD",
+      "name": "Lily Pad",
+      "type": "UNIT",
+      "cost": 1,
+      "attack": 0,
+      "hp": 3,
+      "tribes": [
+        "รักษา"
+      ],
+      "tribe": "รักษา",
+      "keywords": [
+        "กองเรือ"
+      ],
+      "text": "Floats on water. No attack, but gives allied aquatic units cover.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_SPIKEWEED_AQUA",
+      "name": "Aqua Spikeweed",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 1,
+      "hp": 4,
+      "tribes": [
+        "ยุทธศาสตร์"
+      ],
+      "tribe": "ยุทธศาสตร์",
+      "keywords": [
+        "กองเรือ",
+        "DEATHRATTLE"
+      ],
+      "text": "A submerged spikeweed. On death, deals 1 damage to all enemies (future registry effect).",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_SEA_ZOMBIE",
+      "name": "Sea Zombie",
+      "type": "UNIT",
+      "cost": 3,
+      "attack": 3,
+      "hp": 3,
+      "tribes": [
+        "ยุทธศาสตร์"
+      ],
+      "tribe": "ยุทธศาสตร์",
+      "keywords": [
+        "กองเรือ",
+        "จู่โจม"
+      ],
+      "text": "Lunges from the water immediately.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_BASIC_ZOMBIE",
+      "name": "Basic Zombie",
+      "type": "UNIT",
+      "cost": 1,
+      "attack": 1,
+      "hp": 1,
+      "tribes": [
+        "เป็นกลาง"
+      ],
+      "tribe": "เป็นกลาง",
+      "keywords": [],
+      "text": "The most basic of all undead.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_CONEHEAD_ZOMBIE",
+      "name": "Cone-head Zombie",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 2,
+      "hp": 3,
+      "tribes": [
+        "พิทักษ์"
+      ],
+      "tribe": "พิทักษ์",
+      "keywords": [],
+      "text": "Wears a cone for extra protection.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_BUCKETHEAD_ZOMBIE",
+      "name": "Buckethead Zombie",
+      "type": "UNIT",
+      "cost": 3,
+      "attack": 2,
+      "hp": 5,
+      "tribes": [
+        "พิทักษ์"
+      ],
+      "tribe": "พิทักษ์",
+      "keywords": [
+        "DEATHRATTLE"
+      ],
+      "text": "Upon defeat, the bucket becomes a shield for another zombie (deathrattle registry).",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_ZOMBIE_JESTER",
+      "name": "Jester Zombie",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 3,
+      "hp": 1,
+      "tribes": [
+        "จู่โจม"
+      ],
+      "tribe": "จู่โจม",
+      "keywords": [
+        "เกลียดชังตำนาน",
+        "จู่โจม"
+      ],
+      "text": "Rushes in and stabs through everything.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_BULLY_ZOMBIE",
+      "name": "Bully Zombie",
+      "type": "UNIT",
+      "cost": 3,
+      "attack": 3,
+      "hp": 3,
+      "tribes": [
+        "จู่โจม"
+      ],
+      "tribe": "จู่โจม",
+      "keywords": [
+        "โจมตีต่อเนื่อง",
+        "เกลียดชังตำนาน"
+      ],
+      "text": "Double-strikes with full piercing on each hit.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SPELL_FERTILIZE",
+      "name": "Fertilize",
+      "type": "SPELL",
+      "cost": 2,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "จอมอาคม"
+      ],
+      "tribe": "จอมอาคม",
+      "keywords": [],
+      "targetType": "FRIENDLY_UNIT",
+      "text": "Give a friendly unit +2/+2.",
+      "spellEffect": {
+        "buffAttack": 2,
+        "buffHp": 2,
+        "target": "UNIT"
+      },
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SPELL_LIGHTNING_REED",
+      "name": "Lightning Reed",
+      "type": "SPELL",
+      "cost": 3,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "จอมอาคม"
+      ],
+      "tribe": "จอมอาคม",
+      "keywords": [],
+      "targetType": "SINGLE_UNIT",
+      "text": "Deal 3 damage to any target.",
+      "spellEffect": {
+        "damage": 3,
+        "target": "UNIT"
+      },
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SPELL_BRAINS",
+      "name": "Brains for Brains",
+      "type": "SPELL",
+      "cost": 1,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "ปัญญา"
+      ],
+      "tribe": "ปัญญา",
+      "keywords": [],
+      "targetType": "NONE",
+      "text": "Draw 2 cards.",
+      "spellEffect": {
+        "drawCards": 2
+      },
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SPELL_WEED_SPRAY",
+      "name": "Weed Spray",
+      "type": "SPELL",
+      "cost": 4,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "จอมอาคม"
+      ],
+      "tribe": "จอมอาคม",
+      "keywords": [],
+      "targetType": "ALL_ENEMIES",
+      "text": "Deal 2 damage to all enemy units.",
+      "spellEffect": {
+        "damage": 2,
+        "target": "ALL_UNITS"
+      },
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_TORCHWOOD",
+      "name": "Torchwood",
+      "type": "UNIT",
+      "cost": 1,
+      "attack": 0,
+      "hp": 4,
+      "tribes": [
+        "จอมพล"
+      ],
+      "tribe": "จอมพล",
+      "keywords": [
+        "สนับสนุน"
+      ],
+      "text": "Support: Shares a lane behind a frontline unit.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_CHEF_ZOMBIE",
+      "name": "Chef Zombie",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 1,
+      "hp": 3,
+      "tribes": [
+        "จอมพล"
+      ],
+      "tribe": "จอมพล",
+      "keywords": [
+        "สนับสนุน"
+      ],
+      "text": "Support: Backline support that feeds allies.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_DOOM_SHROOM",
+      "name": "Doom-shroom",
+      "type": "UNIT",
+      "cost": 4,
+      "attack": 0,
+      "hp": 2,
+      "tribes": [
+        "ยุทธศาสตร์"
+      ],
+      "tribe": "ยุทธศาสตร์",
+      "keywords": [
+        "DEATHRATTLE"
+      ],
+      "text": "Deathrattle: Deals 3 damage to all units in adjacent lanes!",
+      "deathrattleEffect": {
+        "damage": 3,
+        "target": "ADJACENT_LANES"
+      },
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_BARREL_DEADBEARDS",
+      "name": "Barrel of Deadbeards",
+      "type": "UNIT",
+      "cost": 2,
+      "attack": 0,
+      "hp": 1,
+      "tribes": [
+        "ยุทธศาสตร์"
+      ],
+      "tribe": "ยุทธศาสตร์",
+      "keywords": [
+        "DEATHRATTLE"
+      ],
+      "text": "Deathrattle: Deals 1 damage to all units in adjacent lanes!",
+      "deathrattleEffect": {
+        "damage": 1,
+        "target": "ADJACENT_LANES"
+      },
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "EQ_SPIKED_HELMET",
+      "name": "Spiked Helmet",
+      "type": "EQUIPMENT",
+      "cost": 2,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "พิทักษ์"
+      ],
+      "tribe": "พิทักษ์",
+      "keywords": [],
+      "equipmentEffect": {
+        "attackBonus": 2,
+        "hpBonus": 2,
+        "grantedKeywords": [
+          "เกลียดชังตำนาน"
+        ]
+      },
+      "targetType": "FRIENDLY_UNIT",
+      "text": "Attach to friendly unit: +2/+2 and grants Strikethrough.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "EQ_FERTILIZER_PACK",
+      "name": "Fertilizer Pack",
+      "type": "EQUIPMENT",
+      "cost": 2,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "จอมพล"
+      ],
+      "tribe": "จอมพล",
+      "keywords": [],
+      "equipmentEffect": {
+        "attackBonus": 3,
+        "hpBonus": 3
+      },
+      "targetType": "FRIENDLY_UNIT",
+      "text": "Attach to friendly unit: +3/+3 stat buff.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "ENV_SOLAR_WINDS",
+      "name": "Solar Winds",
+      "type": "ENVIRONMENT",
+      "cost": 2,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "ยุทธศาสตร์"
+      ],
+      "tribe": "ยุทธศาสตร์",
+      "keywords": [],
+      "environmentEffect": {
+        "damagePerTurnEnd": 1
+      },
+      "laneTypeRestriction": "GROUND_1",
+      "text": "Environment: Ground lanes only. Deals 1 damage to all units in lane at turn end.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "ENV_BLACK_HOLE",
+      "name": "Black Hole",
+      "type": "ENVIRONMENT",
+      "cost": 2,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "ยุทธศาสตร์"
+      ],
+      "tribe": "ยุทธศาสตร์",
+      "keywords": [],
+      "environmentEffect": {
+        "damagePerTurnEnd": 2
+      },
+      "laneTypeRestriction": "GROUND_1",
+      "text": "Environment: Ground lanes only. Deals 2 damage to all units in lane at turn end.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_SKY_STRIKE",
+      "name": "Sky Strike",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "ENEMY_HERO",
+      "spellEffect": {
+        "damagePerUnitOnBoard": true,
+        "target": "ENEMY_HERO"
+      },
+      "text": "Signature: Deal direct damage to the enemy Hero equal to the total number of units on the board.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_AERIAL_SURGE",
+      "name": "Aerial Surge",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "FRIENDLY_UNIT",
+      "spellEffect": {
+        "buffAttack": 2,
+        "buffHp": 2,
+        "grantKeyword": "อากาศยาน",
+        "target": "UNIT"
+      },
+      "text": "Superpower: Give a friendly unit +2/+2 and Flying.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_TAILWIND_DRAFT",
+      "name": "Tailwind Draft",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {
+        "drawCards": 2
+      },
+      "text": "Superpower: Draw 2 cards from your deck.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_GLACIAL_GALE",
+      "name": "Glacial Gale",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "LANE",
+      "spellEffect": {
+        "freezeLane": true,
+        "target": "LANE"
+      },
+      "text": "Superpower: Freeze all enemy units in the target lane.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_TIDAL_WAVE",
+      "name": "Tidal Wave",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {
+        "damageAllNonWater": 3
+      },
+      "text": "Signature: Massive tidal wave dealing 3 damage to all non-water units on the board.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_SOOTHING_CURRENT",
+      "name": "Soothing Current",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {
+        "heal": 5
+      },
+      "text": "Superpower: Heal your Hero for 5 HP.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_CORAL_AEGIS",
+      "name": "Coral Aegis",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "FRIENDLY_UNIT",
+      "spellEffect": {
+        "applyStatus": "SHIELD",
+        "target": "UNIT"
+      },
+      "text": "Superpower: Grant Shield to a friendly unit.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_AQUATIC_CONJURATION",
+      "name": "Aquatic Conjuration",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {
+        "summonCardId": "UNIT_WATER_ELEMENTAL"
+      },
+      "text": "Superpower: Summon a 2/2 Water Elemental into an open lane.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_SUNBURN",
+      "name": "Sunburn",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "SINGLE_UNIT",
+      "spellEffect": {
+        "damage": 2,
+        "target": "ANY"
+      },
+      "text": "Superpower: Deal 2 damage to any target.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_WEED_WHACKER",
+      "name": "Weed Whacker",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "ENEMY_UNIT",
+      "spellEffect": {
+        "damage": 3,
+        "target": "UNIT"
+      },
+      "text": "Superpower: Deal 3 damage to an enemy unit.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_MORE_SPORE",
+      "name": "More Spore",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "FRIENDLY_UNIT",
+      "spellEffect": {
+        "buffAttack": 2,
+        "buffHp": 2,
+        "target": "UNIT"
+      },
+      "text": "Superpower: Give a friendly plant +2/+2.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_SUN_BURST",
+      "name": "Sun Burst",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {
+        "heal": 4,
+        "drawCards": 1
+      },
+      "text": "Superpower: Heal your Hero for 4 HP and draw 1 card.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_TELEPATHY",
+      "name": "Telepathy",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {
+        "drawCards": 2
+      },
+      "text": "Superpower: Draw 2 cards.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_CARRIED_AWAY",
+      "name": "Carried Away",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "ENEMY_HERO",
+      "spellEffect": {
+        "damage": 2,
+        "target": "HERO"
+      },
+      "text": "Superpower: Deal 2 damage directly to the enemy Hero.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_SUPER_STENCH",
+      "name": "Super Stench",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "FRIENDLY_UNIT",
+      "spellEffect": {
+        "buffAttack": 2,
+        "buffHp": 1,
+        "target": "UNIT"
+      },
+      "text": "Superpower: Give a friendly Zombie +2/+1.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "SP_CUT_DOWN_TO_SIZE",
+      "name": "Cut Down to Size",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "ENEMY_UNIT",
+      "spellEffect": {
+        "damage": 5,
+        "target": "UNIT"
+      },
+      "text": "Superpower: Deal 5 damage to a high threat unit.",
+      "imageUrl": "",
+      "updatedAt": 0
+    }
+  ],
+  "keywords": [
+    "สนับสนุน",
+    "โจมตีต่อเนื่อง",
+    "เกลียดชังตำนาน",
+    "อากาศยาน",
+    "กองเรือ",
+    "กลืนชีพ",
+    "ทนทาน",
+    "จู่โจม"
+  ],
+  "tribes": [
+    "ปัญญา",
+    "จอมพล",
+    "จู่โจม",
+    "รักษา",
+    "พิทักษ์",
+    "ยุทธศาสตร์",
+    "จอมอาคม",
+    "เป็นกลาง"
+  ]
+}
