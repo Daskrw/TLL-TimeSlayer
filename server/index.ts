@@ -908,8 +908,8 @@ if (process.env.NODE_ENV === "production" || fs.existsSync(clientBuildPath)) {
   console.log(`[Server] Serving client assets from: ${clientBuildPath}`);
   app.use(express.static(clientBuildPath));
 
-  // Fallback routing for SPA (Single Page Application)
-  app.get("*", (req: Request, res: Response, next: NextFunction): void => {
+  // Fallback routing for SPA (Single Page Application) — Express 5 compatible
+  app.use((req: Request, res: Response, next: NextFunction): void => {
     // Allow API, WebSocket, and upload routes to pass through
     if (
       req.path.startsWith("/api") ||
@@ -919,12 +919,14 @@ if (process.env.NODE_ENV === "production" || fs.existsSync(clientBuildPath)) {
     ) {
       return next();
     }
-    const indexFile = path.join(clientBuildPath, "index.html");
-    if (fs.existsSync(indexFile)) {
-      res.sendFile(indexFile);
-    } else {
-      next();
+    if (req.method === "GET") {
+      const indexFile = path.join(clientBuildPath, "index.html");
+      if (fs.existsSync(indexFile)) {
+        res.sendFile(indexFile);
+        return;
+      }
     }
+    next();
   });
 }
 
