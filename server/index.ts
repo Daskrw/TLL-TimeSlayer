@@ -930,11 +930,10 @@ if (process.env.NODE_ENV === "production" || fs.existsSync(clientBuildPath)) {
 
 // ── Server Start ───────────────────────────────────────────────
 
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`====================================================`);
   console.log(`  TLL TimeSlayer — Authoritative Game Server`);
-  console.log(`  Port: http://localhost:${PORT}`);
-  console.log(`  WebSocket: ws://localhost:${PORT}`);
-  console.log(`  Health Check: http://localhost:${PORT}/health`);
+  console.log(`  Listening on: http://0.0.0.0:${PORT}`);
+  console.log(`  Health Check: http://0.0.0.0:${PORT}/health`);
   console.log(`====================================================`);
 });
