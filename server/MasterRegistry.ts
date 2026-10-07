@@ -4,8 +4,12 @@
 
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { CardDefinition, HeroDefinition } from "../src/types";
 import { ALL_STATIC_CARDS } from "../src/cards";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface CardMeta extends CardDefinition {
   imageUrl: string;

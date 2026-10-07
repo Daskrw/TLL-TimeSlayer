@@ -9,7 +9,11 @@ import http from "http";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import { Server, Socket } from "socket.io";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { RoomManager } from "./RoomManager";
 import { ClientToServerEvents, ServerToClientEvents } from "./types";
 import { CardType, PlayerId, TurnPhase } from "../src/types";
