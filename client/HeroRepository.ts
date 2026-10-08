@@ -16,6 +16,7 @@ import {
   fetchHeroesFromSupabase,
   upsertHeroToSupabase,
   deleteHeroFromSupabase,
+  normalizeHeroRow,
   supabase,
 } from "../src/supabaseClient";
 
@@ -155,14 +156,19 @@ export class HeroRepository {
           (payload) => {
             console.log("[HeroRepository] Realtime hero change received from Supabase:", payload.eventType);
             if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-              const row = payload.new as HeroDefinition;
+              const row = normalizeHeroRow(payload.new);
               this.heroDefs.set(row.id, row);
               this.persist();
               this.notify();
             } else if (payload.eventType === "DELETE") {
               const old = payload.old as { id: string };
               if (old?.id) {
-                this.heroDefs.delete(old.id);
+                const defaultHero = DEFAULT_HERO_DEFINITIONS.find((d) => d.id === old.id);
+                if (defaultHero) {
+                  this.heroDefs.set(old.id, { ...defaultHero });
+                } else {
+                  this.heroDefs.delete(old.id);
+                }
                 this.persist();
                 this.notify();
               }
@@ -209,27 +215,34 @@ export class HeroRepository {
 
   public async fetchRemote(): Promise<void> {
     // 1. Try Supabase Cloud PostgreSQL
-    const supabaseHeroes = await fetchHeroesFromSupabase();
-    if (supabaseHeroes && supabaseHeroes.length > 0) {
-      for (const row of supabaseHeroes) {
-        this.heroDefs.set(row.id, row);
+    try {
+      const supabaseHeroes = await fetchHeroesFromSupabase();
+      if (supabaseHeroes && supabaseHeroes.length > 0) {
+        for (const row of supabaseHeroes) {
+          this.heroDefs.set(row.id, row);
+        }
+        this.persist();
+        console.log(`[HeroRepository] Loaded ${supabaseHeroes.length} heroes from Supabase`);
       }
-      this.persist();
-      console.log(`[HeroRepository] Loaded ${supabaseHeroes.length} heroes from Supabase`);
-      return;
+    } catch (err) {
+      console.warn("[HeroRepository] Supabase fetchRemote failed:", err);
     }
 
-    // 2. Try Backend Node.js REST API
+    // 2. Also fetch Backend Node.js REST API (/api/catalog) to merge any server-cached heroes
     try {
       const response = await fetch("/api/catalog");
       if (response.ok) {
         const data = await response.json();
         if (data.heroes && Array.isArray(data.heroes)) {
-          for (const hero of data.heroes) {
-            this.heroDefs.set(hero.id, hero);
+          for (const rawHero of data.heroes) {
+            const hero = normalizeHeroRow(rawHero);
+            const existing = this.heroDefs.get(hero.id);
+            if (!existing || (hero.updatedAt && hero.updatedAt >= (existing.updatedAt || 0))) {
+              this.heroDefs.set(hero.id, hero);
+            }
           }
           this.persist();
-          console.log(`[HeroRepository] Loaded ${data.heroes.length} heroes from Backend Master Registry`);
+          console.log(`[HeroRepository] Synced ${data.heroes.length} heroes from Backend Master Registry`);
         }
       }
     } catch (err) {
@@ -308,10 +321,17 @@ export class HeroRepository {
     this.persist();
     this.notify();
 
-    // 1. Push to Supabase PostgreSQL
-    upsertHeroToSupabase(updated).catch((err) => {
-      console.warn("[HeroRepository] Supabase push error:", err);
-    });
+    // 1. Authoritative push to Supabase PostgreSQL (await it)
+    try {
+      const ok = await upsertHeroToSupabase(updated);
+      if (ok) {
+        console.log(`[HeroRepository] Hero "${updated.name}" (${updated.id}) successfully saved to Supabase heroes table.`);
+      } else {
+        console.warn(`[HeroRepository] Supabase upsert returned false for "${updated.name}" (${updated.id}).`);
+      }
+    } catch (err) {
+      console.warn("[HeroRepository] Supabase push exception:", err);
+    }
 
     // 2. Push to backend REST API
     try {
@@ -337,9 +357,11 @@ export class HeroRepository {
     this.notify();
 
     // 1. Delete from Supabase PostgreSQL
-    deleteHeroFromSupabase(id).catch((err) => {
+    try {
+      await deleteHeroFromSupabase(id);
+    } catch (err) {
       console.warn("[HeroRepository] Supabase delete error:", err);
-    });
+    }
 
     // 2. Delete from backend REST API
     try {

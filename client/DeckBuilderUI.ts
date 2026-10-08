@@ -460,9 +460,10 @@ export class DeckBuilderUI {
     const safeH = this.getSafeHero(this.hero);
     const allowed = this.getAllowedTribes(safeH);
     const tribesStr = allowed.length > 0 ? `${allowed.join(" / ")} / เป็นกลาง` : "ทุกสาย";
-    const icon = (safeH.portraitUrl && !safeH.portraitUrl.startsWith("http") && !safeH.portraitUrl.startsWith("/") && !safeH.portraitUrl.startsWith("data:") && !safeH.portraitUrl.startsWith("./"))
-      ? safeH.portraitUrl
-      : "🧙";
+    const rawIcon = safeH.portraitUrl;
+    const isUrl = rawIcon && (rawIcon.startsWith("http") || rawIcon.startsWith("/") || rawIcon.startsWith("data:") || rawIcon.startsWith("./"));
+    const isInvalid = !rawIcon || rawIcon.toLowerCase() === "loading" || rawIcon.toLowerCase() === "uploading...";
+    const icon = (!isUrl && !isInvalid) ? rawIcon : "🧙";
     filterTextEl.textContent = `${icon} ${safeH.name}: ${tribesStr}`;
   }
 
@@ -488,9 +489,12 @@ export class DeckBuilderUI {
         h.portraitUrl.startsWith("/") ||
         h.portraitUrl.startsWith("./")
       );
+      const fallback = (!h.portraitUrl || h.portraitUrl.toLowerCase() === "loading" || h.portraitUrl.toLowerCase() === "uploading...")
+        ? "🧙"
+        : h.portraitUrl;
       const portraitHtml = isImg
-        ? `<img src="${h.portraitUrl}" alt="${h.name}" class="db-hero-tab-img" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=\\'db-hero-tab-portrait\\'>🧙</span>';" />`
-        : `<span class="db-hero-tab-portrait">${h.portraitUrl || "🧙"}</span>`;
+        ? `<img src="${h.portraitUrl}" alt="${h.name}" class="db-hero-tab-img" crossorigin="anonymous" onerror="this.onerror=null; this.parentElement.innerHTML='<span class=\\'db-hero-tab-portrait\\'>🧙</span>';" />`
+        : `<span class="db-hero-tab-portrait">${fallback}</span>`;
 
       const allowed = this.getAllowedTribes(h);
       const tribePills = (Array.isArray(allowed) ? allowed : []).slice(0, 2).map((t) => `<span class="db-tab-tribe-mini">${t}</span>`).join("");

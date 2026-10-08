@@ -1387,10 +1387,19 @@ export class OverlayController {
       const sig = h.superpowerKit.signatureAbility;
       const cores = h.superpowerKit.coreAbilities;
 
-      const isImg = h.portraitUrl && (h.portraitUrl.startsWith("http") || h.portraitUrl.startsWith("data:") || h.portraitUrl.startsWith("/"));
+      const isImg = h.portraitUrl && (
+        h.portraitUrl.startsWith("http://") ||
+        h.portraitUrl.startsWith("https://") ||
+        h.portraitUrl.startsWith("data:") ||
+        h.portraitUrl.startsWith("/") ||
+        h.portraitUrl.startsWith("./")
+      );
+      const fallbackEmoji = (!h.portraitUrl || h.portraitUrl.toLowerCase() === "loading" || h.portraitUrl.toLowerCase() === "uploading...")
+        ? "🧙"
+        : h.portraitUrl;
       const avatarHtml = isImg
-        ? `<img src="${h.portraitUrl}" alt="${h.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`
-        : (h.portraitUrl || "🧙");
+        ? `<img src="${h.portraitUrl}" alt="${h.name}" crossorigin="anonymous" onerror="this.onerror=null; this.parentElement.innerHTML='🧙';" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`
+        : fallbackEmoji;
       const tribes = (h.allowedTribes && h.allowedTribes.length > 0 ? h.allowedTribes : h.tribeSynergies) || [];
 
       const allAbilities = [

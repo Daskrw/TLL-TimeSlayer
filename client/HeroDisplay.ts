@@ -393,48 +393,74 @@ export function createHeroDisplay(
     lctx.arc(256, 256, 240, 0, Math.PI * 2);
     lctx.fill();
 
-    if (typeof imgOrEmoji !== "string") {
-      lctx.save();
-      lctx.beginPath();
-      lctx.arc(256, 256, 236, 0, Math.PI * 2);
-      lctx.clip();
+    if (typeof imgOrEmoji !== "string" && imgOrEmoji) {
+      try {
+        lctx.save();
+        lctx.beginPath();
+        lctx.arc(256, 256, 236, 0, Math.PI * 2);
+        lctx.clip();
 
-      // Aspect ratio cover calculation
-      const scale = Math.max(512 / imgOrEmoji.width, 512 / imgOrEmoji.height);
-      const nw = imgOrEmoji.width * scale;
-      const nh = imgOrEmoji.height * scale;
-      const nx = (512 - nw) / 2;
-      const ny = (512 - nh) / 2;
-      lctx.drawImage(imgOrEmoji, nx, ny, nw, nh);
-      lctx.restore();
+        // Aspect ratio cover calculation
+        const imgW = imgOrEmoji.width || 512;
+        const imgH = imgOrEmoji.height || 512;
+        const scale = Math.max(512 / imgW, 512 / imgH);
+        const nw = imgW * scale;
+        const nh = imgH * scale;
+        const nx = (512 - nw) / 2;
+        const ny = (512 - nh) / 2;
+        lctx.drawImage(imgOrEmoji, nx, ny, nw, nh);
+        lctx.restore();
 
-      // Sleek inner border shadow
-      lctx.strokeStyle = isPlayer ? "rgba(56, 189, 248, 0.75)" : "rgba(244, 63, 94, 0.75)";
-      lctx.lineWidth = 10;
-      lctx.beginPath();
-      lctx.arc(256, 256, 236, 0, Math.PI * 2);
-      lctx.stroke();
+        // Sleek inner border shadow
+        lctx.strokeStyle = isPlayer ? "rgba(56, 189, 248, 0.75)" : "rgba(244, 63, 94, 0.75)";
+        lctx.lineWidth = 10;
+        lctx.beginPath();
+        lctx.arc(256, 256, 236, 0, Math.PI * 2);
+        lctx.stroke();
+      } catch (err) {
+        console.warn("[HeroDisplay] Error rendering image to canvas, falling back to emoji:", err);
+        renderPortraitCanvas(isPlayer ? "🧙" : "🤖");
+        return;
+      }
     } else {
+      const fallbackStr = isPlayer ? "🧙" : "🤖";
+      const rawText = (typeof imgOrEmoji === "string" ? imgOrEmoji : "").trim();
+      const textToDraw = (!rawText || rawText.toLowerCase() === "loading" || rawText.toLowerCase() === "uploading...")
+        ? fallbackStr
+        : rawText;
+
       lctx.font = "200px 'Segoe UI Emoji', Arial";
       lctx.textAlign = "center";
       lctx.textBaseline = "middle";
       lctx.shadowColor = isPlayer ? "rgba(56, 189, 248, 0.8)" : "rgba(244, 63, 94, 0.8)";
       lctx.shadowBlur = 24;
-      lctx.fillText(imgOrEmoji || "🧙", 256, 256);
+      lctx.fillText(textToDraw, 256, 256);
     }
     labelTex.needsUpdate = true;
   }
 
   function setHeroPortrait(portraitOrEmoji: string): void {
     const p = (portraitOrEmoji || "").trim();
-    if (p.startsWith("http") || p.startsWith("data:") || p.startsWith("/")) {
+    const fallbackEmoji = isPlayer ? "🧙" : "🤖";
+
+    if (!p || p.toLowerCase() === "loading" || p.toLowerCase() === "uploading...") {
+      renderPortraitCanvas(fallbackEmoji);
+      return;
+    }
+
+    if (p.startsWith("http://") || p.startsWith("https://") || p.startsWith("data:") || p.startsWith("/") || p.startsWith("./")) {
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.onload = () => renderPortraitCanvas(img);
-      img.onerror = () => renderPortraitCanvas(isPlayer ? "🧙" : "🤖");
+      img.onload = () => {
+        renderPortraitCanvas(img);
+      };
+      img.onerror = () => {
+        console.warn("[HeroDisplay] Failed to load hero portrait URL:", p);
+        renderPortraitCanvas(fallbackEmoji);
+      };
       img.src = p;
     } else {
-      renderPortraitCanvas(p || (isPlayer ? "🧙" : "🤖"));
+      renderPortraitCanvas(p || fallbackEmoji);
     }
   }
 

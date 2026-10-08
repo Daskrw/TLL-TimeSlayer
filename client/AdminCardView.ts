@@ -555,12 +555,20 @@ export class AdminCardView {
 
       try {
         const hostedUrl = await this.uploadAssetToServer(file);
-        this.pendingHeroImg = hostedUrl;
-        portraitInput.value = hostedUrl;
-        this.setHeroAvatarPreview(hostedUrl);
-        this.showToast("☁ Hero portrait uploaded & hosted on server!");
+        if (hostedUrl) {
+          this.pendingHeroImg = hostedUrl;
+          portraitInput.value = hostedUrl;
+          this.setHeroAvatarPreview(hostedUrl);
+          this.showToast("☁ Hero portrait uploaded & hosted on server!");
+        } else {
+          portraitInput.value = this.pendingHeroImg || "🧙";
+          this.setHeroAvatarPreview(this.pendingHeroImg || "🧙");
+          this.showToast("⚠️ Could not host image remotely, using local preview.");
+        }
       } catch (err) {
         console.warn("[AdminCardView] Hero portrait upload error:", err);
+        portraitInput.value = this.pendingHeroImg || "🧙";
+        this.setHeroAvatarPreview(this.pendingHeroImg || "🧙");
       }
     };
 
@@ -749,10 +757,19 @@ export class AdminCardView {
       tile.dataset.id = h.id;
 
       const isDefault = heroRepo.isDefaultHero(h.id);
-      const isImg = h.portraitUrl && (h.portraitUrl.startsWith("http") || h.portraitUrl.startsWith("data:") || h.portraitUrl.startsWith("/"));
+      const isImg = h.portraitUrl && (
+        h.portraitUrl.startsWith("http://") ||
+        h.portraitUrl.startsWith("https://") ||
+        h.portraitUrl.startsWith("data:") ||
+        h.portraitUrl.startsWith("/") ||
+        h.portraitUrl.startsWith("./")
+      );
+      const fallbackEmoji = (!h.portraitUrl || h.portraitUrl.toLowerCase() === "loading" || h.portraitUrl.toLowerCase() === "uploading...")
+        ? "🧙"
+        : h.portraitUrl;
       const avatarHtml = isImg
-        ? `<img src="${h.portraitUrl}" alt="${h.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`
-        : `<span>${h.portraitUrl || "🧙"}</span>`;
+        ? `<img src="${h.portraitUrl}" alt="${h.name}" crossorigin="anonymous" onerror="this.onerror=null; this.parentElement.innerHTML='<span>🧙</span>';" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`
+        : `<span>${fallbackEmoji}</span>`;
 
       const sigCard = cardRepo.getCard(h.signatureAbilityCardId);
       const c1 = cardRepo.getCard(h.coreAbilityCardIds[0]);
@@ -1019,19 +1036,30 @@ export class AdminCardView {
     const preview = this.heroModal.querySelector("#adm-hero-avatar-preview") as HTMLElement;
     const emojiEl = this.heroModal.querySelector("#adm-hero-avatar-emoji") as HTMLElement;
     const imgEl = this.heroModal.querySelector("#adm-hero-avatar-img") as HTMLImageElement;
+    if (!preview || !emojiEl || !imgEl) return;
 
     const trimmed = (val || "").trim();
-    const isImg = trimmed.startsWith("http") || trimmed.startsWith("data:") || trimmed.startsWith("/");
+    const isImg = trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:") || trimmed.startsWith("/") || trimmed.startsWith("./");
 
     if (isImg) {
+      imgEl.crossOrigin = "anonymous";
+      imgEl.onload = () => {
+        imgEl.style.display = "block";
+        emojiEl.style.display = "none";
+        preview.classList.add("has-image");
+      };
+      imgEl.onerror = () => {
+        imgEl.style.display = "none";
+        emojiEl.textContent = "🧙";
+        emojiEl.style.display = "block";
+        preview.classList.remove("has-image");
+      };
       imgEl.src = trimmed;
-      imgEl.style.display = "block";
-      emojiEl.style.display = "none";
-      preview.classList.add("has-image");
     } else {
       imgEl.src = "";
       imgEl.style.display = "none";
-      emojiEl.textContent = trimmed || "🧙";
+      const fallback = (!trimmed || trimmed.toLowerCase() === "loading" || trimmed.toLowerCase() === "uploading...") ? "🧙" : trimmed;
+      emojiEl.textContent = fallback;
       emojiEl.style.display = "block";
       preview.classList.remove("has-image");
     }
@@ -1064,7 +1092,14 @@ export class AdminCardView {
     const title = (titleInput.value || "").trim();
     const maxHp = parseInt(hpInput.value, 10) || 20;
     const description = (descInput.value || "").trim();
-    const portraitUrl = (portraitInput.value || "🧙").trim();
+    let portraitUrl = (portraitInput.value || "").trim();
+
+    if (!portraitUrl || portraitUrl.toLowerCase() === "uploading..." || portraitUrl.toLowerCase() === "loading") {
+      portraitUrl = this.pendingHeroImg || "🧙";
+    }
+    if (!portraitUrl || portraitUrl.toLowerCase() === "uploading..." || portraitUrl.toLowerCase() === "loading") {
+      portraitUrl = "🧙";
+    }
 
     if (!id) {
       alert("Please provide a unique Hero ID.");
@@ -1091,18 +1126,33 @@ export class AdminCardView {
       title: title || "The Champion",
       description: description || "A formidable hero in battle.",
       maxHp,
-      portraitUrl,
+      portraitUrl: portraitUrl || "🧙",
       allowedTribes: allowedTribes.length > 0 ? allowedTribes : ["Neutral"],
       signatureAbilityCardId: sigId,
       coreAbilityCardIds: [c1Id, c2Id, c3Id],
       updatedAt: Date.now(),
     };
 
-    await heroRepo.saveHero(heroDef);
+    const saveBtn = this.heroModal.querySelector("#adm-btn-save-hero") as HTMLButtonElement;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Publishing to Supabase...";
+    }
 
-    this.closeHeroModal();
-    this.render();
-    this.showToast(`✅ Hero "${name}" saved & published!`);
+    try {
+      await heroRepo.saveHero(heroDef);
+      this.closeHeroModal();
+      this.render();
+      this.showToast(`✅ Hero "${name}" saved & published to Supabase!`);
+    } catch (err) {
+      console.error("[AdminCardView] saveHero error:", err);
+      this.showToast(`⚠️ Error saving hero: ${err}`);
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "💾 Save & Publish Hero";
+      }
+    }
   }
 
   private async confirmDeleteHero(id: string, name: string, isDefault: boolean): Promise<void> {

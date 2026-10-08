@@ -98,6 +98,48 @@ export async function upsertCardToSupabase(card: CardMeta): Promise<boolean> {
 
 // ── Database Operations: Heroes ───────────────────────────────
 
+export function normalizeHeroRow(row: any): HeroDefinition {
+  if (!row) {
+    return {
+      id: "HERO_UNKNOWN",
+      name: "Unknown Hero",
+      title: "",
+      description: "",
+      maxHp: 20,
+      portraitUrl: "🧙",
+      allowedTribes: ["เป็นกลาง"],
+      signatureAbilityCardId: "",
+      coreAbilityCardIds: ["SP_AERIAL_SURGE", "SP_TAILWIND_DRAFT", "SP_GLACIAL_GALE"],
+      updatedAt: Date.now(),
+    };
+  }
+
+  const portrait = row.portraitUrl ?? row.portrait_url ?? "🧙";
+  const safePortrait = (!portrait || portrait === "loading" || portrait === "Uploading...") ? "🧙" : portrait;
+  const rawCores = Array.isArray(row.coreAbilityCardIds ?? row.core_ability_card_ids)
+    ? (row.coreAbilityCardIds ?? row.core_ability_card_ids)
+    : [];
+
+  return {
+    id: String(row.id || "").trim(),
+    name: String(row.name || row.id || "Hero").trim(),
+    title: String(row.title ?? "").trim(),
+    description: String(row.description ?? "").trim(),
+    maxHp: Number(row.maxHp ?? row.max_hp ?? 20) || 20,
+    portraitUrl: safePortrait,
+    allowedTribes: Array.isArray(row.allowedTribes ?? row.allowed_tribes)
+      ? (row.allowedTribes ?? row.allowed_tribes)
+      : ["เป็นกลาง"],
+    signatureAbilityCardId: String(row.signatureAbilityCardId ?? row.signature_ability_card_id ?? "").trim(),
+    coreAbilityCardIds: [
+      String(rawCores[0] || "SP_AERIAL_SURGE"),
+      String(rawCores[1] || "SP_TAILWIND_DRAFT"),
+      String(rawCores[2] || "SP_GLACIAL_GALE"),
+    ],
+    updatedAt: Number(row.updatedAt ?? row.updated_at ?? Date.now()) || Date.now(),
+  };
+}
+
 export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null> {
   try {
     const { data, error } = await supabase.from("heroes").select("*");
@@ -105,7 +147,8 @@ export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null
       console.warn("[Supabase] Error fetching heroes:", error.message);
       return null;
     }
-    return data as HeroDefinition[];
+    if (!data || !Array.isArray(data)) return [];
+    return data.map((row) => normalizeHeroRow(row));
   } catch (err) {
     console.warn("[Supabase] Failed to connect to heroes table:", err);
     return null;
@@ -114,21 +157,43 @@ export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null
 
 export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolean> {
   try {
-    const { error } = await supabase.from("heroes").upsert(
-      {
+    const safePortrait = (!hero.portraitUrl || hero.portraitUrl === "loading" || hero.portraitUrl === "Uploading...")
+      ? "🧙"
+      : hero.portraitUrl;
+
+    const payload: Record<string, any> = {
+      id: hero.id,
+      name: hero.name,
+      title: hero.title || "",
+      description: hero.description || "",
+      maxHp: hero.maxHp || 20,
+      portraitUrl: safePortrait,
+      allowedTribes: hero.allowedTribes || [],
+      signatureAbilityCardId: hero.signatureAbilityCardId || "",
+      coreAbilityCardIds: hero.coreAbilityCardIds || [],
+      updatedAt: hero.updatedAt || Date.now(),
+    };
+
+    let { error } = await supabase.from("heroes").upsert(payload, { onConflict: "id" });
+
+    // Fallback if schema was created with unquoted / snake_case column names
+    if (error && (error.message?.includes("column") || error.code === "PGRST204")) {
+      const snakePayload = {
         id: hero.id,
         name: hero.name,
-        title: hero.title,
-        description: hero.description,
-        maxHp: hero.maxHp || 20,
-        portraitUrl: hero.portraitUrl || "🧙",
-        allowedTribes: hero.allowedTribes || [],
-        signatureAbilityCardId: hero.signatureAbilityCardId,
-        coreAbilityCardIds: hero.coreAbilityCardIds || [],
-        updatedAt: hero.updatedAt || Date.now(),
-      },
-      { onConflict: "id" },
-    );
+        title: hero.title || "",
+        description: hero.description || "",
+        max_hp: hero.maxHp || 20,
+        portrait_url: safePortrait,
+        allowed_tribes: hero.allowedTribes || [],
+        signature_ability_card_id: hero.signatureAbilityCardId || "",
+        core_ability_card_ids: hero.coreAbilityCardIds || [],
+        updated_at: hero.updatedAt || Date.now(),
+      };
+      const retry = await supabase.from("heroes").upsert(snakePayload, { onConflict: "id" });
+      error = retry.error;
+    }
+
     if (error) {
       console.warn("[Supabase] Error upserting hero:", error.message);
       return false;
