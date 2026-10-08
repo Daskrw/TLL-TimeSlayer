@@ -12,7 +12,6 @@ import { CardCatalogModal } from "./CardCatalogModal";
 import { SettingsModal, GraphicsQuality } from "./SettingsModal";
 import { getAdminView } from "./AdminCardView";
 import { heroRepo } from "./HeroRepository";
-import { AVAILABLE_HEROES } from "../src/cards";
 import {
   CAM_POS_X, CAM_POS_Y, CAM_POS_Z,
   CAM_TARGET_X, CAM_TARGET_Y, CAM_TARGET_Z,
@@ -279,8 +278,8 @@ export class ScreenController {
       }
 
       case "DECK_BUILDER": {
-        const heroes = heroRepo.getAllHeroes().length > 0 ? heroRepo.getAllHeroes() : AVAILABLE_HEROES;
-        const hero = heroes[0]!;
+        const heroes = heroRepo.getAllHeroes();
+        const hero = heroes[0];
         this.deckBuilder.show(
           hero,
           () => {

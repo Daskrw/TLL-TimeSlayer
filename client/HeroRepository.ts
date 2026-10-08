@@ -222,10 +222,11 @@ export class HeroRepository {
           this.heroDefs.set(row.id, row);
         }
         this.persist();
-        console.log(`[HeroRepository] Loaded ${supabaseHeroes.length} heroes from Supabase`);
+        console.log(`[HeroRepository] Authoritative sync: Loaded ${supabaseHeroes.length} heroes from Supabase`);
+        return;
       }
     } catch (err) {
-      console.warn("[HeroRepository] Supabase fetchRemote failed:", err);
+      console.error("[HeroRepository] Supabase fetchRemote failed:", err);
     }
 
     // 2. Also fetch Backend Node.js REST API (/api/catalog) to merge any server-cached heroes
@@ -312,7 +313,7 @@ export class HeroRepository {
 
   // ── Write API ─────────────────────────────────────────────────
 
-  public async saveHero(def: HeroDefinition): Promise<void> {
+  public async saveHero(def: HeroDefinition): Promise<boolean> {
     const updated: HeroDefinition = {
       ...def,
       updatedAt: Date.now(),
@@ -322,15 +323,16 @@ export class HeroRepository {
     this.notify();
 
     // 1. Authoritative push to Supabase PostgreSQL (await it)
+    let supabaseSuccess = false;
     try {
-      const ok = await upsertHeroToSupabase(updated);
-      if (ok) {
+      supabaseSuccess = await upsertHeroToSupabase(updated);
+      if (supabaseSuccess) {
         console.log(`[HeroRepository] Hero "${updated.name}" (${updated.id}) successfully saved to Supabase heroes table.`);
       } else {
-        console.warn(`[HeroRepository] Supabase upsert returned false for "${updated.name}" (${updated.id}).`);
+        console.error(`[HeroRepository] Supabase upsert returned false for "${updated.name}" (${updated.id}). Check RLS policies or credentials.`);
       }
     } catch (err) {
-      console.warn("[HeroRepository] Supabase push exception:", err);
+      console.error("[HeroRepository] Supabase push exception:", err);
     }
 
     // 2. Push to backend REST API
@@ -343,6 +345,8 @@ export class HeroRepository {
     } catch (err) {
       console.warn("[HeroRepository] Failed to push hero to server:", err);
     }
+
+    return supabaseSuccess;
   }
 
   public async deleteHero(id: string): Promise<boolean> {

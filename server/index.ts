@@ -25,6 +25,7 @@ import {
   DECK_ABYSSAL_40,
   getStaticCardById,
 } from "../src/cards";
+import { upsertHeroToSupabase, deleteHeroFromSupabase } from "../src/supabaseClient";
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
@@ -226,7 +227,7 @@ app.post("/api/admin/update-card", requireAdminAuth, (req, res): void => {
   }
 });
 
-app.post("/api/admin/update-hero", requireAdminAuth, (req, res): void => {
+app.post("/api/admin/update-hero", requireAdminAuth, async (req, res): Promise<void> => {
   try {
     const { id, hero } = req.body;
     const heroId = id || hero?.id;
@@ -235,6 +236,14 @@ app.post("/api/admin/update-hero", requireAdminAuth, (req, res): void => {
       return;
     }
     const updated = masterRegistry.updateHero(heroId, hero);
+
+    // Sync to Supabase PostgreSQL database
+    try {
+      await upsertHeroToSupabase(updated);
+    } catch (sbErr) {
+      console.warn("[Server] Supabase sync warning during update-hero:", sbErr);
+    }
+
     io.emit("CATALOG_UPDATED" as any, { type: "hero", hero: updated, updatedAt: Date.now() });
     console.log(`[Admin] Hero updated & persisted: ${updated.name} (${updated.id})`);
     res.json({ success: true, hero: updated });
@@ -244,7 +253,7 @@ app.post("/api/admin/update-hero", requireAdminAuth, (req, res): void => {
   }
 });
 
-app.post("/api/admin/delete-hero", requireAdminAuth, (req, res): void => {
+app.post("/api/admin/delete-hero", requireAdminAuth, async (req, res): Promise<void> => {
   try {
     const { id } = req.body;
     if (!id) {
@@ -252,6 +261,14 @@ app.post("/api/admin/delete-hero", requireAdminAuth, (req, res): void => {
       return;
     }
     masterRegistry.deleteHero(id);
+
+    // Delete from Supabase PostgreSQL database
+    try {
+      await deleteHeroFromSupabase(id);
+    } catch (sbErr) {
+      console.warn("[Server] Supabase delete warning during delete-hero:", sbErr);
+    }
+
     io.emit("CATALOG_UPDATED" as any, { type: "hero_deleted", id, updatedAt: Date.now() });
     console.log(`[Admin] Hero deleted/reset: ${id}`);
     res.json({ success: true });

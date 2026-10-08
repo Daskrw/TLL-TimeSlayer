@@ -283,20 +283,20 @@ export class GameController {
 
   // ── Match Setup Flows (Local & Online) ────────────────────────
 
-  public startLocalMatchFlow(): void {
+  public async startLocalMatchFlow(): Promise<void> {
     networkService.leaveMatch();
     networkService.isOnlineMode = false;
-    const initialHeroes = heroRepo.getAllHeroes();
-    const heroes = initialHeroes.length > 0 ? initialHeroes : AVAILABLE_HEROES;
+    await heroRepo.whenReady();
+    const heroes = heroRepo.getAllHeroes();
 
     this.overlay.showHeroSelection(heroes, (playerHeroChoice, oppHeroChoice) => {
       this.showDeckBuilder(playerHeroChoice, oppHeroChoice);
     });
   }
 
-  public startOnlineLoadoutFlow(roomId: string, _role: "p1" | "p2"): void {
-    const initialHeroes = heroRepo.getAllHeroes();
-    const heroes = initialHeroes.length > 0 ? initialHeroes : AVAILABLE_HEROES;
+  public async startOnlineLoadoutFlow(roomId: string, _role: "p1" | "p2"): Promise<void> {
+    await heroRepo.whenReady();
+    const heroes = heroRepo.getAllHeroes();
 
     this.overlay.showHeroSelection(heroes, (playerHeroChoice) => {
       this.deckBuilder.show(

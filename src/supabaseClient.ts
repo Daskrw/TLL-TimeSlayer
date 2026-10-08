@@ -144,13 +144,13 @@ export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null
   try {
     const { data, error } = await supabase.from("heroes").select("*");
     if (error) {
-      console.warn("[Supabase] Error fetching heroes:", error.message);
+      console.error("[Supabase] Error fetching heroes:", error.message, error);
       return null;
     }
     if (!data || !Array.isArray(data)) return [];
     return data.map((row) => normalizeHeroRow(row));
   } catch (err) {
-    console.warn("[Supabase] Failed to connect to heroes table:", err);
+    console.error("[Supabase] Failed to connect to heroes table:", err);
     return null;
   }
 }
@@ -195,12 +195,12 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
     }
 
     if (error) {
-      console.warn("[Supabase] Error upserting hero:", error.message);
+      console.error("[Supabase] Error upserting hero:", error.message, error);
       return false;
     }
     return true;
   } catch (err) {
-    console.warn("[Supabase] Exception upserting hero:", err);
+    console.error("[Supabase] Exception upserting hero:", err);
     return false;
   }
 }

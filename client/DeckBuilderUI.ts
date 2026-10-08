@@ -257,7 +257,8 @@ export class DeckBuilderUI {
     };
   }
 
-  public show(hero?: Hero, onDone?: (deck: CardDefinition[], hero: Hero) => void, onClose?: () => void): void {
+  public async show(hero?: Hero, onDone?: (deck: CardDefinition[], hero: Hero) => void, onClose?: () => void): Promise<void> {
+    await heroRepo.whenReady();
     DeckStorage.seedDefaults();
     this.setupListeners();
     const allHeroes = heroRepo.getAllHeroes();

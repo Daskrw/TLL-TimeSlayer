@@ -14,13 +14,19 @@ import { screenController } from "./ScreenController";
 import { initializeGameData } from "./CardRepository";
 import { heroRepo } from "./HeroRepository";
 
-// Preload authoritative master catalog from backend
-initializeGameData().then(() => heroRepo.whenReady()).catch(console.warn);
 import {
   CAM_POS_X, CAM_POS_Y, CAM_POS_Z,
   CAM_TARGET_Y, CAM_TARGET_Z, CAM_FOV,
   BOARD_HALF_W, LANE_HALF_LEN,
 } from "./visualConstants";
+
+// Preload authoritative master catalog & heroes from Supabase / Backend
+Promise.all([
+  initializeGameData(),
+  heroRepo.whenReady(),
+]).catch((err) => {
+  console.warn("[main.ts] Data hydration notice:", err);
+});
 
 // ─────────────────────────────────────────────────────────────
 //  Renderer + Scene

@@ -1140,10 +1140,14 @@ export class AdminCardView {
     }
 
     try {
-      await heroRepo.saveHero(heroDef);
+      const ok = await heroRepo.saveHero(heroDef);
       this.closeHeroModal();
       this.render();
-      this.showToast(`✅ Hero "${name}" saved & published to Supabase!`);
+      if (ok) {
+        this.showToast(`✅ Hero "${name}" saved & published to Supabase!`);
+      } else {
+        this.showToast(`⚠️ Hero saved locally, but failed to write to Supabase (check RLS/network).`);
+      }
     } catch (err) {
       console.error("[AdminCardView] saveHero error:", err);
       this.showToast(`⚠️ Error saving hero: ${err}`);
