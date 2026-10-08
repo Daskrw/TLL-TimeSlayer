@@ -381,6 +381,7 @@ export interface PlayerState {
   superBlock: SuperBlockMeter;
   availableSuperpowers: Card[];
   fatigueCount: number;
+  immuneDamageUntilTurnEnd?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────

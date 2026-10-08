@@ -34,7 +34,8 @@ export function isSuperpowerCard(card: Card | { id: string; type?: CardType; tri
     card.type === CardType.HeroAbility ||
     card.tribe === "Superpower" ||
     (card.tribes && card.tribes.includes("Superpower")) ||
-    card.id.startsWith("SP_")
+    card.id.startsWith("SP_") ||
+    card.id.startsWith("card_sp_")
   );
 }
 
@@ -112,6 +113,7 @@ function clonePlayer(p: PlayerState): PlayerState {
     superBlock: { ...p.superBlock },
     availableSuperpowers: p.availableSuperpowers.map((c) => createCardInstance(c)),
     fatigueCount: p.fatigueCount,
+    immuneDamageUntilTurnEnd: p.immuneDamageUntilTurnEnd ?? false,
   };
 }
 
@@ -503,6 +505,7 @@ export class GameEngine {
       superBlock: { charges: 0, triggerCount: 0, superBlockTriggered: false },
       availableSuperpowers: [...p1Superpowers],
       fatigueCount: 0,
+      immuneDamageUntilTurnEnd: false,
     };
 
     const p2State: PlayerState = {
@@ -518,6 +521,7 @@ export class GameEngine {
       superBlock: { charges: 0, triggerCount: 0, superBlockTriggered: false },
       availableSuperpowers: [...p2Superpowers],
       fatigueCount: 0,
+      immuneDamageUntilTurnEnd: false,
     };
 
     const lanes: [LaneState, LaneState, LaneState, LaneState] = [
@@ -980,9 +984,7 @@ export class GameEngine {
       // Recalculate auras (aura source stats may have changed)
       this.recalculateAuras(s, events);
     } else if (card.type === CardType.Spell || card.type === CardType.HeroAbility) {
-      if (card.spellEffect) {
-        this.resolveSpellEffect(s, playerId, card.spellEffect, laneIndex, targetInstanceId, events);
-      }
+      this.resolveCardAbility(s, playerId, card, laneIndex, targetInstanceId, events);
       // Spent regular spells go to graveyard (Hero Superpowers are banished/disposed permanently)
       if (!isSuperpowerCard(card)) {
         player.graveyard.push(createCardInstance(card));
@@ -999,6 +1001,132 @@ export class GameEngine {
     s.eventLog.push(...events);
     this.state = s;
     return { success: true, state: this.getState(), events };
+  }
+
+  private resolveCardAbility(
+    s: GameState,
+    playerId: PlayerId,
+    card: Card,
+    laneIndex?: number,
+    targetInstanceId?: string,
+    events: GameEvent[] = [],
+  ): void {
+    const player = playerId === PlayerId.Player ? s.player : s.opponent;
+    const isP1 = playerId === PlayerId.Player;
+
+    // 1. Signature: Shield of Legend
+    if (card.id === "card_sp_shield_of_legend") {
+      player.immuneDamageUntilTurnEnd = true;
+      this.emit(events, GameEventType.HERO_HEALED, `${playerId} activated "Shield of Legend"! Hero and all friendly units are immune to all damage until the end of the turn.`, {
+        playerId,
+        cardId: card.id,
+        immuneDamageUntilTurnEnd: true,
+      });
+      return;
+    }
+
+    // 2. Skill 1: Human Shield
+    if (card.id === "card_sp_human_shield") {
+      if (targetInstanceId) {
+        const u = this.findUnitById(s, targetInstanceId);
+        if (u && u.ownerId === playerId) {
+          u.maxHp += 2;
+          u.currentHp += 2;
+          if (!u.keywords.includes(Keyword.Armored)) {
+            u.keywords.push(Keyword.Armored);
+          }
+          this.emit(events, GameEventType.UNIT_BUFFED, `"${u.name}" was granted Human Shield (+2 HP & Armored / ทนทาน).`, {
+            targetInstanceId,
+            hpBonus: 2,
+            currentHp: u.currentHp,
+          });
+        }
+      }
+      return;
+    }
+
+    // 3. Skill 2: Suppress one's anger
+    if (card.id === "card_sp_suppress_anger") {
+      // 3.1 Draw highest HP unit
+      let highestHpUnitIdx = -1;
+      let maxHpFound = -Infinity;
+      for (let i = 0; i < player.deck.length; i++) {
+        const c = player.deck[i];
+        if (c.type === CardType.Unit) {
+          if (c.hp > maxHpFound) {
+            maxHpFound = c.hp;
+            highestHpUnitIdx = i;
+          }
+        }
+      }
+      if (highestHpUnitIdx !== -1) {
+        const unitCard = player.deck.splice(highestHpUnitIdx, 1)[0]!;
+        if (player.hand.length < this.config.maxHandSize) {
+          player.hand.push(unitCard);
+          this.emit(events, GameEventType.CARD_DRAWN, `${player.id} drew highest HP unit "${unitCard.name}" (${unitCard.hp} HP) via Suppress one's anger.`, {
+            playerId: player.id,
+            cardId: unitCard.id,
+            cardName: unitCard.name,
+          });
+        } else {
+          player.graveyard.push(createCardInstance(unitCard));
+          this.emit(events, GameEventType.CARD_BURNED, `${player.id} reached hand limit (11). "${unitCard.name}" was burned!`, {
+            playerId: player.id,
+            cardId: unitCard.id,
+          });
+        }
+      } else {
+        this.drawCardForPlayer(player, events);
+      }
+
+      // 3.2 Draw 1 Spell card
+      const spellIdx = player.deck.findIndex((c) => c.type === CardType.Spell);
+      if (spellIdx !== -1) {
+        const spellCard = player.deck.splice(spellIdx, 1)[0]!;
+        if (player.hand.length < this.config.maxHandSize) {
+          player.hand.push(spellCard);
+          this.emit(events, GameEventType.CARD_DRAWN, `${player.id} drew spell "${spellCard.name}" via Suppress one's anger.`, {
+            playerId: player.id,
+            cardId: spellCard.id,
+            cardName: spellCard.name,
+          });
+        } else {
+          player.graveyard.push(createCardInstance(spellCard));
+          this.emit(events, GameEventType.CARD_BURNED, `${player.id} reached hand limit (11). "${spellCard.name}" was burned!`, {
+            playerId: player.id,
+            cardId: spellCard.id,
+          });
+        }
+      } else {
+        this.drawCardForPlayer(player, events);
+      }
+      return;
+    }
+
+    // 4. Skill 3: Leave it to the dust
+    if (card.id === "card_sp_leave_to_dust") {
+      for (const lane of s.lanes) {
+        const enemyUnits = isP1
+          ? [lane.opponentFrontline, lane.opponentSupport].filter(Boolean) as UnitInstance[]
+          : [lane.playerFrontline, lane.playerSupport].filter(Boolean) as UnitInstance[];
+        for (const u of enemyUnits) {
+          const prevAtk = u.attack;
+          u.attack = Math.max(0, u.attack - 1);
+          this.emit(events, GameEventType.UNIT_BUFFED, `"${u.name}" attack reduced by 1 via Leave it to the dust (${prevAtk} -> ${u.attack}).`, {
+            instanceId: u.instanceId,
+            attackReduced: 1,
+            currentAtk: u.attack,
+          });
+        }
+      }
+      this.recalculateAuras(s, events);
+      return;
+    }
+
+    // Default spell effect handler
+    if (card.spellEffect) {
+      this.resolveSpellEffect(s, playerId, card.spellEffect, laneIndex, targetInstanceId, events);
+    }
   }
 
   /**
@@ -1079,8 +1207,8 @@ export class GameEngine {
             laneIndex: targetLaneIndex,
           });
         }
-      } else if (superpower.spellEffect) {
-        this.resolveSpellEffect(s, playerId, superpower.spellEffect, targetLaneIndex, targetInstanceId, events);
+      } else {
+        this.resolveCardAbility(s, playerId, superpower, targetLaneIndex, targetInstanceId, events);
       }
     } else {
       // KEEP: Bypasses hand limit
@@ -1464,7 +1592,7 @@ export class GameEngine {
     for (const dmg of pendingDamages) {
       let dealt = 0;
       if (dmg.targetType === "UNIT" && dmg.unit) {
-        dealt = this.applyDamageToUnit(dmg.unit, dmg.damage, events, dmg.attackerIsDeadly);
+        dealt = this.applyDamageToUnit(s, dmg.unit, dmg.damage, events, dmg.attackerIsDeadly);
       } else if (dmg.targetType === "HERO" && dmg.heroPlayerId) {
         dealt = this.applyDamageToHero(s, dmg.heroPlayerId, dmg.damage, dmg.attackerId, laneIdx, events);
         if (s.superBlockInterrupt !== null) {
@@ -1508,33 +1636,17 @@ export class GameEngine {
 
     if (u.keywords.includes(Keyword.Strikethrough)) {
       if (oppFront) {
-        oppFront.currentHp -= atk;
-        this.emit(events, GameEventType.UNIT_DAMAGED, `"${oppFront.name}" took ${atk} damage from Rush.`, {
-          instanceId: oppFront.instanceId,
-          damage: atk,
-        });
+        this.applyDamageToUnit(s, oppFront, atk, events);
       }
       if (oppSupp) {
-        oppSupp.currentHp -= atk;
-        this.emit(events, GameEventType.UNIT_DAMAGED, `"${oppSupp.name}" took ${atk} damage from Rush.`, {
-          instanceId: oppSupp.instanceId,
-          damage: atk,
-        });
+        this.applyDamageToUnit(s, oppSupp, atk, events);
       }
       this.applyDamageToHero(s, enemyHeroId, atk, u.instanceId, laneIdx, events);
     } else {
       if (oppFront) {
-        oppFront.currentHp -= atk;
-        this.emit(events, GameEventType.UNIT_DAMAGED, `"${oppFront.name}" took ${atk} damage from Rush.`, {
-          instanceId: oppFront.instanceId,
-          damage: atk,
-        });
+        this.applyDamageToUnit(s, oppFront, atk, events);
       } else if (oppSupp) {
-        oppSupp.currentHp -= atk;
-        this.emit(events, GameEventType.UNIT_DAMAGED, `"${oppSupp.name}" took ${atk} damage from Rush.`, {
-          instanceId: oppSupp.instanceId,
-          damage: atk,
-        });
+        this.applyDamageToUnit(s, oppSupp, atk, events);
       } else {
         // Direct to hero
         this.applyDamageToHero(s, enemyHeroId, atk, u.instanceId, laneIdx, events);
@@ -1554,6 +1666,19 @@ export class GameEngine {
   ): number {
     if (damage <= 0) return 0;
     const targetPlayer = targetHeroId === PlayerId.Player ? s.player : s.opponent;
+
+    // Check turn immunity (e.g. Shield of Legend)
+    if (targetPlayer.immuneDamageUntilTurnEnd) {
+      this.emit(events, GameEventType.HERO_DAMAGED, `${targetHeroId} is immune to all damage this turn (Shield of Legend)! Prevented ${damage} damage.`, {
+        playerId: targetHeroId,
+        damage: 0,
+        preventedDamage: damage,
+        currentHp: targetPlayer.hp,
+        attackerId,
+      });
+      return 0;
+    }
+
     const meter = targetPlayer.superBlock;
 
     // Check if meter is eligible for charging (max 3 triggers per game)
@@ -1753,6 +1878,10 @@ export class GameEngine {
     this.emit(events, GameEventType.TURN_ENDED, `Turn ${s.turnNumber} ended.`, { turnNumber: s.turnNumber });
 
     s.turnNumber += 1;
+    // Reset turn immunity flags
+    s.player.immuneDamageUntilTurnEnd = false;
+    s.opponent.immuneDamageUntilTurnEnd = false;
+
     // Shared mana pool increases by +1 each turn and fully refills
     const newMaxMana = Math.min(10, s.turnNumber);
     s.player.maxMana = newMaxMana;
@@ -1782,11 +1911,7 @@ export class GameEngine {
       if (lane.environment?.environmentEffect?.damagePerTurnEnd) {
         const dmg = lane.environment.environmentEffect.damagePerTurnEnd;
         for (const u of units) {
-          u.currentHp -= dmg;
-          this.emit(events, GameEventType.UNIT_DAMAGED, `Environment "${lane.environment.name}" dealt ${dmg} turn-end damage to "${u.name}".`, {
-            instanceId: u.instanceId,
-            damage: dmg,
-          });
+          this.applyDamageToUnit(s, u, dmg, events);
         }
       }
     }
@@ -1894,7 +2019,7 @@ export class GameEngine {
 
         for (const u of units) {
           if (!u.keywords.includes(Keyword.Amphibious) && lane.type !== LaneType.Water) {
-            this.applyDamageToUnit(u, dmg, events);
+            this.applyDamageToUnit(s, u, dmg, events);
           }
         }
       }
@@ -1904,7 +2029,7 @@ export class GameEngine {
     if (eff.damage && targetInstanceId) {
       const u = this.findUnitById(s, targetInstanceId);
       if (u) {
-        this.applyDamageToUnit(u, eff.damage, events);
+        this.applyDamageToUnit(s, u, eff.damage, events);
       }
     } else if (eff.damage && laneIndex !== undefined) {
       const lane = s.lanes[laneIndex];
@@ -1915,7 +2040,7 @@ export class GameEngine {
         lane.opponentSupport,
       ].filter(Boolean) as UnitInstance[];
       for (const u of targets) {
-        this.applyDamageToUnit(u, eff.damage, events);
+        this.applyDamageToUnit(s, u, eff.damage, events);
       }
     } else if (eff.damage) {
       // Face damage to enemy hero
@@ -2137,16 +2262,30 @@ export class GameEngine {
   }
 
   /**
-   * Apply damage to a unit, respecting Shield (absorbs first hit) and Deadly (kills on any hit).
-   * Returns the actual damage dealt (0 if shield absorbed).
+   * Apply damage to a unit, respecting Shield (absorbs first hit), Deadly (kills on any hit),
+   * and turn damage immunity (Shield of Legend).
+   * Returns the actual damage dealt (0 if shield absorbed or immune).
    */
   private applyDamageToUnit(
+    s: GameState,
     unit: UnitInstance,
     rawDamage: number,
     events: GameEvent[],
     attackerIsDeadly = false,
   ): number {
     if (rawDamage <= 0) return 0;
+
+    // Check turn immunity (e.g. Shield of Legend)
+    const ownerState = unit.ownerId === PlayerId.Player ? s.player : s.opponent;
+    if (ownerState.immuneDamageUntilTurnEnd) {
+      this.emit(events, GameEventType.UNIT_DAMAGED, `"${unit.name}" is immune to all damage this turn (Shield of Legend)! Prevented ${rawDamage} damage.`, {
+        instanceId: unit.instanceId,
+        damage: 0,
+        preventedDamage: rawDamage,
+        currentHp: unit.currentHp,
+      });
+      return 0;
+    }
 
     // Shield absorbs the hit
     if (unit.hasShield) {

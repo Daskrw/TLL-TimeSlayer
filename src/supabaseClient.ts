@@ -216,6 +216,23 @@ export function normalizeHeroRow(row: any): HeroDefinition {
   };
 }
 
+export const LEGACY_HERO_IDS = [
+  "HERO_SKY_VANGUARD",
+  "HERO_ABYSSAL_SORCERER",
+  "HERO_SOLAR_FLARE",
+  "HERO_SUPER_BRAINZ",
+];
+
+export async function clearLegacyHeroesFromSupabase(): Promise<void> {
+  try {
+    for (const legacyId of LEGACY_HERO_IDS) {
+      await supabase.from("heroes").delete().eq("id", legacyId);
+    }
+  } catch (err) {
+    console.warn("[Supabase] Failed to clear legacy heroes:", err);
+  }
+}
+
 export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null> {
   try {
     const { data, error } = await supabase.from("heroes").select("*");
@@ -224,7 +241,16 @@ export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null
       return null;
     }
     if (!data || !Array.isArray(data)) return [];
-    return data.map((row) => normalizeHeroRow(row));
+    
+    // Check if any legacy heroes exist and clean them up
+    const hasLegacy = data.some((row) => LEGACY_HERO_IDS.includes(row.id));
+    if (hasLegacy) {
+      clearLegacyHeroesFromSupabase().catch(() => {});
+    }
+
+    return data
+      .filter((row) => !LEGACY_HERO_IDS.includes(row.id))
+      .map((row) => normalizeHeroRow(row));
   } catch (err) {
     console.error("[Supabase] Failed to connect to heroes table:", err);
     return null;

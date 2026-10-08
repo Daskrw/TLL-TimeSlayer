@@ -54,6 +54,16 @@ interface HeroArchetypeMap {
 }
 
 const HERO_ARCHETYPE_MAP: Record<string, HeroArchetypeMap> = {
+  hero_aegis_guardian: {
+    primary: "Control",
+    secondary: "Midrange",
+    coreCards: [
+      "CARD_WALL_NUT", "CARD_TALLNUT", "CARD_BUCKETHEAD_ZOMBIE",
+      "CARD_SUNFLOWER", "CARD_BONK_CHOY", "CARD_CHEF_ZOMBIE",
+    ],
+    preferredKeywords: [Keyword.Armored, Keyword.Aura, Keyword.Support],
+    preferredLanes: [undefined, LaneType.Ground1],
+  },
   HERO_SKY_VANGUARD: {
     primary: "Aggro",
     secondary: "Midrange",

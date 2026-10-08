@@ -23,6 +23,7 @@ import {
   CardType,
 } from "./types";
 import {
+  HERO_AEGIS_GUARDIAN,
   HERO_SOLAR_FLARE,
   HERO_SUPER_BRAINZ,
   HERO_SKY_VANGUARD,
@@ -42,9 +43,10 @@ import {
   SOLAR_WINDS,
   BLACK_HOLE,
   LIGHTNING_REED,
-  SP_SUN_BURST,
-  SP_SKY_STRIKE,
-  SP_TIDAL_WAVE,
+  SP_SHIELD_OF_LEGEND,
+  SP_HUMAN_SHIELD,
+  SP_SUPPRESS_ANGER,
+  SP_LEAVE_TO_DUST,
 } from "./cards";
 
 function assert(condition: unknown, msg: string): asserts condition {
@@ -451,10 +453,10 @@ console.log("\n▶ TEST 8: Super-Block Auto-Draw (Bypassing 11 Hand Limit & Spel
   const rP1SpellPhase = engine.playCard(PlayerId.Player, p1Sp.id, 0, targetId);
   assert(rP1SpellPhase.success, `Successfully played 0-cost Superpower during P1_SPELL_PHASE: ${!rP1SpellPhase.success ? (rP1SpellPhase as any).error : ""}`);
 
-  // 4. Test non-targeted Superpower (e.g. SP_SUN_BURST / SP_TELEPATHY) with NO targetId required!
-  const sunBurstCard = { ...SP_SUN_BURST, cost: 0 };
-  (engine as unknown as { state: typeof state }).state.player.hand.push(sunBurstCard);
-  const rNonTargeted = engine.playCard(PlayerId.Player, sunBurstCard.id, 1);
+  // 4. Test non-targeted Superpower (e.g. SP_SHIELD_OF_LEGEND) with NO targetId required!
+  const shieldCard = { ...SP_SHIELD_OF_LEGEND, cost: 0 };
+  (engine as unknown as { state: typeof state }).state.player.hand.push(shieldCard);
+  const rNonTargeted = engine.playCard(PlayerId.Player, shieldCard.id, 1);
   assert(rNonTargeted.success, `Non-targeted Superpower successfully played anywhere on board without targetId: ${!rNonTargeted.success ? (rNonTargeted as any).error : ""}`);
 }
 
@@ -758,18 +760,18 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
   console.log("\n▶ TEST 14: Symmetric Hero vs Hero & 4-Card Superpower Kit Initialization");
   const engine = new GameEngine();
   const state = engine.initializeGame(
-    HERO_SKY_VANGUARD,
+    HERO_AEGIS_GUARDIAN,
     DECK_VANGUARD_40,
-    HERO_ABYSSAL_SORCERER,
+    HERO_AEGIS_GUARDIAN,
     DECK_ABYSSAL_40,
     { firstPlayerId: PlayerId.Player },
   );
 
   // 1. Verify PlayerHero and OpponentHero have symmetric Hero structure
-  assert(state.player.hero.id === "HERO_SKY_VANGUARD", "Player Hero is Sky Vanguard");
-  assert(state.player.hero.title === "The Sky Vanguard", "Hero title matches");
-  assert(state.opponent.hero.id === "HERO_ABYSSAL_SORCERER", "Opponent Hero is Abyssal Sorcerer");
-  assert(state.opponent.hero.title === "Abyssal Sorcerer", "Opponent Hero title matches");
+  assert(state.player.hero.id === "hero_aegis_guardian", "Player Hero is Aegis Guardian");
+  assert(state.player.hero.title === "The Indomitable Bulwark", "Hero title matches");
+  assert(state.opponent.hero.id === "hero_aegis_guardian", "Opponent Hero is Aegis Guardian");
+  assert(state.opponent.hero.title === "The Indomitable Bulwark", "Opponent Hero title matches");
 
   // 2. Both heroes have 20 starting HP
   assert(state.player.hp === 20 && state.player.maxHp === 20, "Player starts at 20 HP");
@@ -778,71 +780,48 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
   // 3. Verify 4-Card Superpower Kit
   const pKit = state.player.hero.superpowerKit;
   assert(pKit !== undefined, "Player Hero has superpowerKit");
-  assert(pKit.signatureAbility.id === "SP_SKY_STRIKE", "Player Signature Ability is Sky Strike");
+  assert(pKit.signatureAbility.id === "card_sp_shield_of_legend", "Player Signature Ability is Shield of Legend");
   assert(pKit.coreAbilities.length === 3, "Player has 3 Core Abilities in kit");
 
   const oKit = state.opponent.hero.superpowerKit;
   assert(oKit !== undefined, "Opponent Hero has superpowerKit");
-  assert(oKit.signatureAbility.id === "SP_TIDAL_WAVE", "Opponent Signature Ability is Tidal Wave");
+  assert(oKit.signatureAbility.id === "card_sp_shield_of_legend", "Opponent Signature Ability is Shield of Legend");
   assert(oKit.coreAbilities.length === 3, "Opponent has 3 Core Abilities in kit");
 
   // 4. Initial available superpower pool has all 4 cards (1 signature + 3 core)
   assert(state.player.availableSuperpowers.length === 4, "Player available superpower pool has 4 cards");
   assert(state.opponent.availableSuperpowers.length === 4, "Opponent available superpower pool has 4 cards");
-  console.log("  ✓ Symmetric Hero entities initialized with 4-card kits (1 Signature + 3 Core)");
+  console.log("  ✓ Symmetric Aegis Guardian entities initialized with 4-card kits (1 Signature + 3 Core)");
 }
 
 // ─────────────────────────────────────────────────────────────
-//  TEST 15: Hero A Signature Ability (Sky Strike deals dmg = units on board)
+//  TEST 15: Superpowers: Shield of Legend & Human Shield
 // ─────────────────────────────────────────────────────────────
 {
-  console.log("\n▶ TEST 15: Hero A Signature Ability: Sky Strike (Damage = units on board)");
+  console.log("\n▶ TEST 15: Superpowers: Shield of Legend & Human Shield");
   const engine = new GameEngine();
   const state = engine.initializeGame(
-    HERO_SKY_VANGUARD,
+    HERO_AEGIS_GUARDIAN,
     DECK_VANGUARD_40,
-    HERO_ABYSSAL_SORCERER,
+    HERO_AEGIS_GUARDIAN,
     DECK_ABYSSAL_40,
     { firstPlayerId: PlayerId.Player },
   );
 
-  // Set phase to P1_SPELL_PHASE and mana to 5
   state.currentPhase = TurnPhase.P1_SPELL_PHASE;
   state.player.currentMana = 5;
-  state.player.maxMana = 5;
 
-  // Place 2 player units and 1 opponent unit on board (total 3 units)
-  state.lanes[0].playerFrontline = {
-    instanceId: "u_sky_1",
-    cardId: "u_sky_1",
-    ownerId: PlayerId.Player,
-    laneIndex: 0,
-    name: "Sky Scout",
-    tribe: "Aerial",
-    baseKeywords: [Keyword.Flying],
-    keywords: [Keyword.Flying],
-    attack: 2,
-    maxHp: 2,
-    currentHp: 2,
-    hasAttackedThisTurn: false,
-    summonedThisTurn: false,
-    isSupport: false,
-    attachedEquipment: [],
-    isFrozen: false,
-    hasShield: false,
-    isDeadly: false,
-    auraModifiers: [],
-  };
+  // Place a player unit in Lane 1
   state.lanes[1].playerFrontline = {
-    instanceId: "u_sky_2",
-    cardId: "u_sky_2",
+    instanceId: "u_p_1",
+    cardId: "u_p_1",
     ownerId: PlayerId.Player,
     laneIndex: 1,
-    name: "Ground Trooper",
-    tribe: "Vanguard",
+    name: "Guardian Defender",
+    tribe: "Guardian",
     baseKeywords: [],
     keywords: [],
-    attack: 1,
+    attack: 2,
     maxHp: 3,
     currentHp: 3,
     hasAttackedThisTurn: false,
@@ -854,16 +833,52 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
     isDeadly: false,
     auraModifiers: [],
   };
+
+  // Test 1: Play Human Shield on target unit
+  state.player.hand = [SP_HUMAN_SHIELD, SP_SHIELD_OF_LEGEND];
+  (engine as unknown as { state: typeof state }).state = state;
+
+  const res1 = engine.playCard(PlayerId.Player, SP_HUMAN_SHIELD.id, 1, "u_p_1");
+  assert(res1.success, "Played SP_HUMAN_SHIELD on friendly unit");
+  const buffedUnit = engine.getState().lanes[1].playerFrontline!;
+  assert(buffedUnit.currentHp === 5 && buffedUnit.maxHp === 5, "Unit received +2 HP (3 -> 5)");
+  assert(buffedUnit.keywords.includes(Keyword.Armored), "Unit gained Armored keyword");
+
+  // Test 2: Play Shield of Legend
+  const res2 = engine.playCard(PlayerId.Player, SP_SHIELD_OF_LEGEND.id);
+  assert(res2.success, "Played SP_SHIELD_OF_LEGEND successfully");
+  assert(engine.getState().player.immuneDamageUntilTurnEnd === true, "Player immuneDamageUntilTurnEnd is active");
+  console.log("  ✓ Human Shield buffed HP and granted Armor; Shield of Legend activated full immunity");
+}
+
+// ─────────────────────────────────────────────────────────────
+//  TEST 16: Superpowers: Suppress one's anger & Leave it to the dust
+// ─────────────────────────────────────────────────────────────
+{
+  console.log("\n▶ TEST 16: Superpowers: Suppress one's anger & Leave it to the dust");
+  const engine = new GameEngine();
+  const state = engine.initializeGame(
+    HERO_AEGIS_GUARDIAN,
+    DECK_VANGUARD_40,
+    HERO_AEGIS_GUARDIAN,
+    DECK_ABYSSAL_40,
+    { firstPlayerId: PlayerId.Player },
+  );
+
+  state.currentPhase = TurnPhase.P1_SPELL_PHASE;
+  state.player.currentMana = 5;
+
+  // Place enemy units with 3 attack in Lanes 1 & 2
   state.lanes[1].opponentFrontline = {
     instanceId: "u_opp_1",
     cardId: "u_opp_1",
     ownerId: PlayerId.Opponent,
     laneIndex: 1,
-    name: "Enemy Guard",
+    name: "Enemy 1",
     tribe: "Aquatic",
     baseKeywords: [],
     keywords: [],
-    attack: 2,
+    attack: 3,
     maxHp: 4,
     currentHp: 4,
     hasAttackedThisTurn: false,
@@ -875,48 +890,18 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
     isDeadly: false,
     auraModifiers: [],
   };
-
-  // Put SP_SKY_STRIKE in player's hand
-  state.player.hand = [SP_SKY_STRIKE];
-  (engine as unknown as { state: typeof state }).state = state;
-
-  const initialOppHp = state.opponent.hp;
-  const res = engine.playCard(PlayerId.Player, SP_SKY_STRIKE.id, 0);
-  assert(res.success, "Played SP_SKY_STRIKE successfully");
-  assert(engine.getState().opponent.hp === initialOppHp - 3, "Opponent Hero took 3 damage (equal to 3 board units)");
-  console.log("  ✓ Sky Strike dealt exact damage equal to total units on board (3)");
-}
-
-// ─────────────────────────────────────────────────────────────
-//  TEST 16: Hero B Signature Ability: Tidal Wave (Damage all non-water units)
-// ─────────────────────────────────────────────────────────────
-{
-  console.log("\n▶ TEST 16: Hero B Signature Ability: Tidal Wave (Damage all non-water units)");
-  const engine = new GameEngine();
-  const state = engine.initializeGame(
-    HERO_ABYSSAL_SORCERER,
-    DECK_ABYSSAL_40,
-    HERO_SKY_VANGUARD,
-    DECK_VANGUARD_40,
-    { firstPlayerId: PlayerId.Player },
-  );
-
-  state.currentPhase = TurnPhase.P1_SPELL_PHASE;
-  state.player.currentMana = 5;
-
-  // Place a non-water unit with 3 HP in Lane 1 (Ground)
-  state.lanes[1].opponentFrontline = {
-    instanceId: "ground_foe",
-    cardId: "ground_foe",
+  state.lanes[2].opponentFrontline = {
+    instanceId: "u_opp_2",
+    cardId: "u_opp_2",
     ownerId: PlayerId.Opponent,
-    laneIndex: 1,
-    name: "Ground Foe",
-    tribe: "Vanguard",
+    laneIndex: 2,
+    name: "Enemy 2",
+    tribe: "Aquatic",
     baseKeywords: [],
     keywords: [],
-    attack: 2,
-    maxHp: 3,
-    currentHp: 3,
+    attack: 1,
+    maxHp: 2,
+    currentHp: 2,
     hasAttackedThisTurn: false,
     summonedThisTurn: false,
     isSupport: false,
@@ -927,41 +912,22 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
     auraModifiers: [],
   };
 
-  // Place an Amphibious unit with 3 HP in Lane 1 (Ground)
-  state.lanes[1].playerFrontline = {
-    instanceId: "amph_friend",
-    cardId: "amph_friend",
-    ownerId: PlayerId.Player,
-    laneIndex: 1,
-    name: "Amphibious Friend",
-    tribe: "Aquatic",
-    baseKeywords: [Keyword.Amphibious],
-    keywords: [Keyword.Amphibious],
-    attack: 2,
-    maxHp: 3,
-    currentHp: 3,
-    hasAttackedThisTurn: false,
-    summonedThisTurn: false,
-    isSupport: false,
-    attachedEquipment: [],
-    isFrozen: false,
-    hasShield: false,
-    isDeadly: false,
-    auraModifiers: [],
-  };
-
-  state.player.hand = [SP_TIDAL_WAVE];
+  // Test 1: Play Leave it to the dust
+  state.player.hand = [SP_LEAVE_TO_DUST, SP_SUPPRESS_ANGER];
   (engine as unknown as { state: typeof state }).state = state;
 
-  const res = engine.playCard(PlayerId.Player, SP_TIDAL_WAVE.id);
-  assert(res.success, "Played SP_TIDAL_WAVE successfully");
+  const res1 = engine.playCard(PlayerId.Player, SP_LEAVE_TO_DUST.id);
+  assert(res1.success, "Played SP_LEAVE_TO_DUST successfully");
+  assert(engine.getState().lanes[1].opponentFrontline!.attack === 2, "Enemy 1 attack reduced by 1 (3 -> 2)");
+  assert(engine.getState().lanes[2].opponentFrontline!.attack === 0, "Enemy 2 attack reduced by 1 (1 -> 0)");
 
-  const afterState = engine.getState();
-  // Non-amphibious Ground Foe took 3 damage and died (removed from board)
-  assert(afterState.lanes[1].opponentFrontline === null, "Non-water unit was wiped out by Tidal Wave");
-  // Amphibious Friend took 0 damage and remains at 3 HP
-  assert(afterState.lanes[1].playerFrontline !== null && afterState.lanes[1].playerFrontline.currentHp === 3, "Amphibious unit was immune to Tidal Wave");
-  console.log("  ✓ Tidal Wave damaged all non-water units while sparing amphibious units");
+  // Test 2: Play Suppress one's anger
+  const handBefore = engine.getState().player.hand.length;
+  const res2 = engine.playCard(PlayerId.Player, SP_SUPPRESS_ANGER.id);
+  assert(res2.success, "Played SP_SUPPRESS_ANGER successfully");
+  // Spent 1 card from hand, drew 2 cards -> net +1 card
+  assert(engine.getState().player.hand.length === handBefore + 1, "Player drew 2 cards (highest HP unit + spell)");
+  console.log("  ✓ Leave it to the dust debuffed enemy units; Suppress anger drew unit and spell");
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -971,9 +937,9 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
   console.log("\n▶ TEST 17: Hero Super Block Draw & Reusable Pool Fallback");
   const engine = new GameEngine();
   const state = engine.initializeGame(
-    HERO_SKY_VANGUARD,
+    HERO_AEGIS_GUARDIAN,
     DECK_VANGUARD_40,
-    HERO_ABYSSAL_SORCERER,
+    HERO_AEGIS_GUARDIAN,
     DECK_ABYSSAL_40,
     { firstPlayerId: PlayerId.Player },
   );
@@ -1018,11 +984,11 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
   const drawnCard = afterState.player.hand[0];
   assert(drawnCard.cost === 0, "Drawn superpower costs 0 mana");
   const heroKitIds = [
-    HERO_SKY_VANGUARD.superpowerKit.signatureAbility.id,
-    ...HERO_SKY_VANGUARD.superpowerKit.coreAbilities.map((c) => c.id),
+    HERO_AEGIS_GUARDIAN.superpowerKit.signatureAbility.id,
+    ...HERO_AEGIS_GUARDIAN.superpowerKit.coreAbilities.map((c) => c.id),
   ];
   assert(heroKitIds.includes(drawnCard.id), "Drawn card is from Hero's 4-card superpower kit");
-  console.log("  ✓ Auto-drew 0-cost superpower from Hero's 4-card kit even when pool was exhausted");
+  console.log("  ✓ Auto-drew 0-cost superpower from Aegis Guardian's 4-card kit even when pool was exhausted");
 }
 
 console.log("\n============================================================");

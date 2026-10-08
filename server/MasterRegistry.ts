@@ -26,54 +26,25 @@ export interface MasterRegistryData {
 
 export const DEFAULT_HEROES: HeroDefinition[] = [
   {
-    id: "HERO_SKY_VANGUARD",
-    name: "Valen",
-    title: "The Sky Vanguard",
-    description: "Master of high-altitude aerial tactics and whirlwind momentum. Strikes fast and hard from above before foes can react.",
+    id: "hero_aegis_guardian",
+    name: "Aegis Guardian",
+    title: "The Indomitable Bulwark",
+    description: "ผู้พิทักษ์แห่งโล่ ผู้ใช้พลังป้องกันและสะกดกลั้นการโจมตี ปกป้องพวกพ้องและเปลี่ยนสนามรบให้เป็นป้อมปราการอันไร้พ่าย",
     maxHp: 20,
-    portraitUrl: "🦅",
-    allowedTribes: ["จู่โจม", "ยุทธศาสตร์", "จอมพล"],
-    signatureAbilityCardId: "SP_SKY_STRIKE",
-    coreAbilityCardIds: ["SP_AERIAL_SURGE", "SP_TAILWIND_DRAFT", "SP_GLACIAL_GALE"],
-    updatedAt: 0,
-  },
-  {
-    id: "HERO_ABYSSAL_SORCERER",
-    name: "Nereus",
-    title: "Abyssal Sorcerer",
-    description: "Ancient mystic commanding the deepest oceanic trenches. Submerges the entire battlefield in roaring tidal waves while sustaining allies.",
-    maxHp: 20,
-    portraitUrl: "🌊",
-    allowedTribes: ["จอมอาคม", "ปัญญา", "รักษา"],
-    signatureAbilityCardId: "SP_TIDAL_WAVE",
-    coreAbilityCardIds: ["SP_SOOTHING_CURRENT", "SP_CORAL_AEGIS", "SP_AQUATIC_CONJURATION"],
-    updatedAt: 0,
-  },
-  {
-    id: "HERO_SOLAR_FLARE",
-    name: "Solar Flare",
-    title: "The Solar Vanguard",
-    description: "Radiant flame specialist who incinerates threats with blistering solar bursts and fiery energy.",
-    maxHp: 20,
-    portraitUrl: "🌻",
-    allowedTribes: ["รักษา", "จู่โจม", "จอมอาคม"],
-    signatureAbilityCardId: "SP_SUNBURN",
-    coreAbilityCardIds: ["SP_WEED_WHACKER", "SP_MORE_SPORE", "SP_SUN_BURST"],
-    updatedAt: 0,
-  },
-  {
-    id: "HERO_SUPER_BRAINZ",
-    name: "Super Brainz",
-    title: "Psionic Mastermind",
-    description: "Cerebral powerhouse wielding psionic disruption, telekinesis, and overwhelming brute force.",
-    maxHp: 20,
-    portraitUrl: "🧠",
-    allowedTribes: ["ปัญญา", "พิทักษ์", "ยุทธศาสตร์"],
-    signatureAbilityCardId: "SP_TELEPATHY",
-    coreAbilityCardIds: ["SP_CARRIED_AWAY", "SP_SUPER_STENCH", "SP_CUT_DOWN_TO_SIZE"],
+    portraitUrl: "🛡️",
+    allowedTribes: ["ปัญญา", "จอมพล", "จู่โจม", "รักษา", "พิทักษ์", "ยุทธศาสตร์", "จอมอาคม", "เป็นกลาง"],
+    signatureAbilityCardId: "card_sp_shield_of_legend",
+    coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
     updatedAt: 0,
   },
 ];
+
+export const LEGACY_HERO_IDS = new Set([
+  "HERO_SKY_VANGUARD",
+  "HERO_ABYSSAL_SORCERER",
+  "HERO_SOLAR_FLARE",
+  "HERO_SUPER_BRAINZ",
+]);
 
 export const CORE_KEYWORDS: string[] = [
   "สนับสนุน",
@@ -152,9 +123,11 @@ export class MasterRegistry {
           }
         }
 
-        // Populate heroes
+        // Populate heroes (excluding legacy ones)
         for (const hero of data.heroes || []) {
-          this.heroesMap.set(hero.id, { ...hero });
+          if (!LEGACY_HERO_IDS.has(hero.id)) {
+            this.heroesMap.set(hero.id, { ...hero });
+          }
         }
 
         // Seed any missing default heroes
@@ -165,6 +138,7 @@ export class MasterRegistry {
         }
 
         this.updatedAt = data.updatedAt || Date.now();
+        this.saveToFile();
         console.log(`[MasterRegistry] Loaded ${this.cardsMap.size} cards and ${this.heroesMap.size} heroes from ${REGISTRY_FILE}`);
         return;
       } catch (err) {

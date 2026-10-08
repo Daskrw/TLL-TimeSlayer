@@ -519,84 +519,102 @@ export const SP_AQUATIC_CONJURATION: CardDefinition = superpower(
   "NONE",
 );
 
+// ─────────────────────────────────────────────────────────────
+//  Aegis Guardian Superpowers (4 Custom Abilities)
+// ─────────────────────────────────────────────────────────────
+
+export const SP_SHIELD_OF_LEGEND: CardDefinition = superpower(
+  "card_sp_shield_of_legend",
+  "Shield of Legend",
+  CardType.HeroAbility,
+  "Superpower",
+  0,
+  {},
+  0,
+  0,
+  [],
+  "เมื่อใช้ จนจบเทิร์นนี้ ฮีโร่ของคุณและยูนิททั้งหมดของคุณจะไม่ได้รับความเสียหายทุกกรณี",
+  "NONE",
+);
+
+export const SP_HUMAN_SHIELD: CardDefinition = {
+  id: "card_sp_human_shield",
+  name: "Human Shield",
+  type: CardType.Equipment,
+  cost: 1,
+  attack: 0,
+  hp: 0,
+  tribes: ["Superpower"],
+  tribe: "Superpower",
+  keywords: [],
+  targetType: "FRIENDLY_UNIT",
+  equipmentEffect: {
+    attackBonus: 0,
+    hpBonus: 2,
+    grantedKeywords: [Keyword.Armored],
+  },
+  text: "เลือกสวมให้ยูนิทฝ่ายเรา 1 ตัวในสนาม ยูนิทนั้นได้รับ HP +2 และได้รับคีย์เวิร์ด 'ทนทาน' (Armor / ทนทาน)",
+};
+
+export const SP_SUPPRESS_ANGER: CardDefinition = superpower(
+  "card_sp_suppress_anger",
+  "Suppress one's anger",
+  CardType.HeroAbility,
+  "Superpower",
+  1,
+  {},
+  0,
+  0,
+  [],
+  "เมื่อใช้ จั่วการ์ด 2 ใบ: ยูนิทที่มี HP สูงสุดในเด็ค 1 ใบ และการ์ดเวท 1 ใบ",
+  "NONE",
+);
+
+export const SP_LEAVE_TO_DUST: CardDefinition = superpower(
+  "card_sp_leave_to_dust",
+  "Leave it to the dust",
+  CardType.HeroAbility,
+  "Superpower",
+  1,
+  {},
+  0,
+  0,
+  [],
+  "เมื่อใช้ ทำให้ยูนิทศัตรูทั้งหมดในสนาม Atk -1",
+  "NONE",
+);
+
 // ─── Hero Definitions ─────────────────────────────────────────
 
-export const HERO_SKY_VANGUARD: Hero = {
-  id: "HERO_SKY_VANGUARD",
-  name: "Valen",
-  title: "The Sky Vanguard",
-  description: "Master of high-altitude aerial tactics and whirlwind momentum. Strikes fast and hard from above before foes can react.",
-  portraitUrl: "🦅",
+export const HERO_AEGIS_GUARDIAN: Hero = {
+  id: "hero_aegis_guardian",
+  name: "Aegis Guardian",
+  title: "The Indomitable Bulwark",
+  description: "ผู้พิทักษ์แห่งโล่ ผู้ใช้พลังป้องกันและสะกดกลั้นการโจมตี ปกป้องพวกพ้องและเปลี่ยนสนามรบให้เป็นป้อมปราการอันไร้พ่าย",
+  portraitUrl: "🛡️",
   maxHp: 20,
   startingHp: 20,
-  allowedTribes: ["จู่โจม", "ยุทธศาสตร์", "จอมพล"],
-  tribeSynergies: ["จู่โจม", "ยุทธศาสตร์", "จอมพล"],
+  allowedTribes: ["ปัญญา", "จอมพล", "จู่โจม", "รักษา", "พิทักษ์", "ยุทธศาสตร์", "จอมอาคม", "เป็นกลาง"],
+  tribeSynergies: ["พิทักษ์", "รักษา", "ปัญญา"],
   superpowerKit: {
-    signatureAbility: SP_SKY_STRIKE,
-    coreAbilities: [SP_AERIAL_SURGE, SP_TAILWIND_DRAFT, SP_GLACIAL_GALE],
+    signatureAbility: SP_SHIELD_OF_LEGEND,
+    coreAbilities: [SP_HUMAN_SHIELD, SP_SUPPRESS_ANGER, SP_LEAVE_TO_DUST],
   },
-  superpowers: [SP_SKY_STRIKE, SP_AERIAL_SURGE, SP_TAILWIND_DRAFT, SP_GLACIAL_GALE],
-};
-export const HERO_A = HERO_SKY_VANGUARD;
-
-export const HERO_ABYSSAL_SORCERER: Hero = {
-  id: "HERO_ABYSSAL_SORCERER",
-  name: "Nereus",
-  title: "Abyssal Sorcerer",
-  description: "Ancient mystic commanding the deepest oceanic trenches. Submerges the entire battlefield in roaring tidal waves while sustaining allies.",
-  portraitUrl: "🌊",
-  maxHp: 20,
-  startingHp: 20,
-  allowedTribes: ["จอมอาคม", "ปัญญา", "รักษา"],
-  tribeSynergies: ["จอมอาคม", "ปัญญา", "รักษา"],
-  superpowerKit: {
-    signatureAbility: SP_TIDAL_WAVE,
-    coreAbilities: [SP_SOOTHING_CURRENT, SP_CORAL_AEGIS, SP_AQUATIC_CONJURATION],
-  },
-  superpowers: [SP_TIDAL_WAVE, SP_SOOTHING_CURRENT, SP_CORAL_AEGIS, SP_AQUATIC_CONJURATION],
-};
-export const HERO_B = HERO_ABYSSAL_SORCERER;
-
-export const HERO_SOLAR_FLARE: Hero = {
-  id: "HERO_SOLAR_FLARE",
-  name: "Solar Flare",
-  title: "The Solar Vanguard",
-  description: "Radiant flame specialist who incinerates threats with blistering solar bursts.",
-  portraitUrl: "🌻",
-  maxHp: 20,
-  startingHp: 20,
-  allowedTribes: ["รักษา", "จู่โจม", "จอมอาคม"],
-  tribeSynergies: ["รักษา", "จู่โจม", "จอมอาคม"],
-  superpowerKit: {
-    signatureAbility: SP_SUNBURN,
-    coreAbilities: [SP_WEED_WHACKER, SP_MORE_SPORE, SP_SUN_BURST],
-  },
-  superpowers: [SP_SUNBURN, SP_WEED_WHACKER, SP_MORE_SPORE, SP_SUN_BURST],
-};
-
-export const HERO_SUPER_BRAINZ: Hero = {
-  id: "HERO_SUPER_BRAINZ",
-  name: "Super Brainz",
-  title: "Psionic Mastermind",
-  description: "Cerebral powerhouse wielding psionic disruption and brute strength.",
-  portraitUrl: "🧠",
-  maxHp: 20,
-  startingHp: 20,
-  allowedTribes: ["ปัญญา", "พิทักษ์", "ยุทธศาสตร์"],
-  tribeSynergies: ["ปัญญา", "พิทักษ์", "ยุทธศาสตร์"],
-  superpowerKit: {
-    signatureAbility: SP_TELEPATHY,
-    coreAbilities: [SP_CARRIED_AWAY, SP_SUPER_STENCH, SP_CUT_DOWN_TO_SIZE],
-  },
-  superpowers: [SP_TELEPATHY, SP_CARRIED_AWAY, SP_SUPER_STENCH, SP_CUT_DOWN_TO_SIZE],
+  superpowers: [SP_SHIELD_OF_LEGEND, SP_HUMAN_SHIELD, SP_SUPPRESS_ANGER, SP_LEAVE_TO_DUST],
 };
 
 export const AVAILABLE_HEROES: readonly Hero[] = [
-  HERO_SKY_VANGUARD,
-  HERO_ABYSSAL_SORCERER,
-  HERO_SOLAR_FLARE,
-  HERO_SUPER_BRAINZ,
+  HERO_AEGIS_GUARDIAN,
 ];
+
+// Compatibility aliases
+export const HERO_DEFAULT = HERO_AEGIS_GUARDIAN;
+export const HERO_A = HERO_AEGIS_GUARDIAN;
+export const HERO_B = HERO_AEGIS_GUARDIAN;
+export const HERO_SKY_VANGUARD = HERO_AEGIS_GUARDIAN;
+export const HERO_ABYSSAL_SORCERER = HERO_AEGIS_GUARDIAN;
+export const HERO_SOLAR_FLARE = HERO_AEGIS_GUARDIAN;
+export const HERO_SUPER_BRAINZ = HERO_AEGIS_GUARDIAN;
 
 // ─── Pre-built Sample Decks ───────────────────────────────────
 
@@ -734,6 +752,8 @@ export const ALL_STATIC_CARDS: CardDefinition[] = (() => {
     SPIKED_HELMET, FERTILIZER_PACK,
     SOLAR_WINDS, BLACK_HOLE,
     // Superpowers
+    SP_SHIELD_OF_LEGEND, SP_HUMAN_SHIELD,
+    SP_SUPPRESS_ANGER, SP_LEAVE_TO_DUST,
     SP_SKY_STRIKE, SP_AERIAL_SURGE,
     SP_TAILWIND_DRAFT, SP_GLACIAL_GALE,
     SP_TIDAL_WAVE, SP_SOOTHING_CURRENT,

@@ -3,87 +3,98 @@
   "updatedAt": 1791376792163,
   "heroes": [
     {
-      "id": "HERO_SKY_VANGUARD",
-      "name": "Valen",
-      "title": "The Sky Vanguard",
-      "description": "Master of high-altitude aerial tactics and whirlwind momentum. Strikes fast and hard from above before foes can react.",
+      "id": "hero_aegis_guardian",
+      "name": "Aegis Guardian",
+      "title": "The Indomitable Bulwark",
+      "description": "ผู้พิทักษ์แห่งโล่ ผู้ใช้พลังป้องกันและสะกดกลั้นการโจมตี ปกป้องพวกพ้องและเปลี่ยนสนามรบให้เป็นป้อมปราการอันไร้พ่าย",
       "maxHp": 20,
-      "portraitUrl": "🦅",
+      "portraitUrl": "🛡️",
       "allowedTribes": [
-        "จู่โจม",
-        "ยุทธศาสตร์",
-        "จอมพล"
-      ],
-      "signatureAbilityCardId": "SP_SKY_STRIKE",
-      "coreAbilityCardIds": [
-        "SP_AERIAL_SURGE",
-        "SP_TAILWIND_DRAFT",
-        "SP_GLACIAL_GALE"
-      ],
-      "updatedAt": 0
-    },
-    {
-      "id": "HERO_ABYSSAL_SORCERER",
-      "name": "Nereus",
-      "title": "Abyssal Sorcerer",
-      "description": "Ancient mystic commanding the deepest oceanic trenches. Submerges the entire battlefield in roaring tidal waves while sustaining allies.",
-      "maxHp": 20,
-      "portraitUrl": "🌊",
-      "allowedTribes": [
-        "จอมอาคม",
         "ปัญญา",
-        "รักษา"
-      ],
-      "signatureAbilityCardId": "SP_TIDAL_WAVE",
-      "coreAbilityCardIds": [
-        "SP_SOOTHING_CURRENT",
-        "SP_CORAL_AEGIS",
-        "SP_AQUATIC_CONJURATION"
-      ],
-      "updatedAt": 0
-    },
-    {
-      "id": "HERO_SOLAR_FLARE",
-      "name": "Solar Flare",
-      "title": "The Solar Vanguard",
-      "description": "Radiant flame specialist who incinerates threats with blistering solar bursts and fiery energy.",
-      "maxHp": 20,
-      "portraitUrl": "🌻",
-      "allowedTribes": [
+        "จอมพล",
+        "จู่โจม",
         "รักษา",
-        "จู่โจม",
-        "จอมอาคม"
-      ],
-      "signatureAbilityCardId": "SP_SUNBURN",
-      "coreAbilityCardIds": [
-        "SP_WEED_WHACKER",
-        "SP_MORE_SPORE",
-        "SP_SUN_BURST"
-      ],
-      "updatedAt": 0
-    },
-    {
-      "id": "HERO_SUPER_BRAINZ",
-      "name": "Super Brainz",
-      "title": "Psionic Mastermind",
-      "description": "Cerebral powerhouse wielding psionic disruption, telekinesis, and overwhelming brute force.",
-      "maxHp": 20,
-      "portraitUrl": "🧠",
-      "allowedTribes": [
-        "ปัญญา",
         "พิทักษ์",
-        "ยุทธศาสตร์"
+        "ยุทธศาสตร์",
+        "จอมอาคม",
+        "เป็นกลาง"
       ],
-      "signatureAbilityCardId": "SP_TELEPATHY",
+      "signatureAbilityCardId": "card_sp_shield_of_legend",
       "coreAbilityCardIds": [
-        "SP_CARRIED_AWAY",
-        "SP_SUPER_STENCH",
-        "SP_CUT_DOWN_TO_SIZE"
+        "card_sp_human_shield",
+        "card_sp_suppress_anger",
+        "card_sp_leave_to_dust"
       ],
       "updatedAt": 0
     }
   ],
   "cards": [
+    {
+      "id": "card_sp_shield_of_legend",
+      "name": "Shield of Legend",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "text": "เมื่อใช้ จนจบเทิร์นนี้ ฮีโร่ของคุณและยูนิททั้งหมดของคุณจะไม่ได้รับความเสียหายทุกกรณี",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "card_sp_human_shield",
+      "name": "Human Shield",
+      "type": "EQUIPMENT",
+      "cost": 1,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [
+        "ทนทาน"
+      ],
+      "text": "เลือกสวมให้ยูนิทฝ่ายเรา 1 ตัวในสนาม ยูนิทนั้นได้รับ HP +2 และได้รับคีย์เวิร์ด 'ทนทาน' (Armor / ทนทาน)",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "card_sp_suppress_anger",
+      "name": "Suppress one's anger",
+      "type": "HERO_ABILITY",
+      "cost": 1,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "text": "เมื่อใช้ จั่วการ์ด 2 ใบ: ยูนิทที่มี HP สูงสุดในเด็ค 1 ใบ และการ์ดเวท 1 ใบ",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "card_sp_leave_to_dust",
+      "name": "Leave it to the dust",
+      "type": "HERO_ABILITY",
+      "cost": 1,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "text": "เมื่อใช้ ทำให้ยูนิทศัตรูทั้งหมดในสนาม Atk -1",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
     {
       "id": "CARD_SUNFLOWER",
       "name": "Sunflower",
