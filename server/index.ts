@@ -25,7 +25,7 @@ import {
   DECK_ABYSSAL_40,
   getStaticCardById,
 } from "../src/cards";
-import { upsertHeroToSupabase, deleteHeroFromSupabase } from "../src/supabaseClient";
+import { upsertHeroToSupabase, deleteHeroFromSupabase, upsertCardToSupabase } from "../src/supabaseClient";
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
@@ -209,7 +209,7 @@ app.get("/api/catalog", (_req, res) => {
 });
 
 // All /api/admin/* routes are guarded by requireAdminAuth middleware.
-app.post("/api/admin/update-card", requireAdminAuth, (req, res): void => {
+app.post("/api/admin/update-card", requireAdminAuth, async (req, res): Promise<void> => {
   try {
     const { id, patch, card } = req.body;
     const cardId = id || card?.id;
@@ -218,6 +218,14 @@ app.post("/api/admin/update-card", requireAdminAuth, (req, res): void => {
       return;
     }
     const updated = masterRegistry.updateCard(cardId, patch || card);
+
+    // Sync to Supabase PostgreSQL database
+    try {
+      await upsertCardToSupabase(updated);
+    } catch (sbErr) {
+      console.warn("[Server] Supabase sync warning during update-card:", sbErr);
+    }
+
     io.emit("CATALOG_UPDATED" as any, { type: "card", card: updated, updatedAt: Date.now() });
     console.log(`[Admin] Card updated & persisted: ${updated.name} (${updated.id})`);
     res.json({ success: true, card: updated });

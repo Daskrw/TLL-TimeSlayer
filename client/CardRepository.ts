@@ -9,7 +9,12 @@
 
 import { CardDefinition, CardType, Keyword } from "../src/types";
 import * as StaticCards from "../src/cards";
-import { fetchCardsFromSupabase, upsertCardToSupabase, supabase } from "../src/supabaseClient";
+import {
+  fetchCardsFromSupabase,
+  upsertCardToSupabase,
+  normalizeCardRow,
+  supabase,
+} from "../src/supabaseClient";
 
 // ─────────────────────────────────────────────────────────────
 //  CardMeta — extended card definition with CMS fields
@@ -81,12 +86,8 @@ export class CardRepository {
           (payload) => {
             console.log("[CardRepository] Realtime card change received from Supabase:", payload.eventType);
             if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-              const row = payload.new as CardMeta;
-              this.cards.set(row.id, {
-                ...row,
-                tribes: row.tribes || (row.tribe ? [row.tribe] : ["เป็นกลาง"]),
-                tribe: row.tribe || row.tribes?.[0] || "เป็นกลาง",
-              });
+              const row = normalizeCardRow(payload.new);
+              this.cards.set(row.id, row);
               this.persistLocalOverrides();
               this.notify();
             } else if (payload.eventType === "DELETE") {
@@ -184,18 +185,18 @@ export class CardRepository {
 
   public async fetchRemote(): Promise<void> {
     // 1. Try Supabase Cloud PostgreSQL
-    const supabaseCards = await fetchCardsFromSupabase();
-    if (supabaseCards && supabaseCards.length > 0) {
-      for (const row of supabaseCards) {
-        this.cards.set(row.id, {
-          ...row,
-          tribes: row.tribes || (row.tribe ? [row.tribe] : ["เป็นกลาง"]),
-          tribe: row.tribe || row.tribes?.[0] || "เป็นกลาง",
-        });
+    try {
+      const supabaseCards = await fetchCardsFromSupabase();
+      if (supabaseCards && supabaseCards.length > 0) {
+        for (const row of supabaseCards) {
+          this.cards.set(row.id, row);
+        }
+        this.persistLocalOverrides();
+        console.log(`[CardRepository] Loaded ${supabaseCards.length} authoritative cards from Supabase PostgreSQL`);
+        return;
       }
-      this.persistLocalOverrides();
-      console.log(`[CardRepository] Loaded ${supabaseCards.length} cards from Supabase PostgreSQL`);
-      return;
+    } catch (err) {
+      console.error("[CardRepository] Supabase fetchRemote error:", err);
     }
 
     // 2. Try Node.js Backend REST API
@@ -204,15 +205,15 @@ export class CardRepository {
       if (response.ok) {
         const data = await response.json();
         if (data.cards && Array.isArray(data.cards)) {
-          for (const card of data.cards) {
-            this.cards.set(card.id, {
-              ...card,
-              tribes: card.tribes && card.tribes.length > 0 ? card.tribes : (card.tribe ? [card.tribe] : ["เป็นกลาง"]),
-              tribe: card.tribe || card.tribes?.[0] || "เป็นกลาง",
-            });
+          for (const rawCard of data.cards) {
+            const card = normalizeCardRow(rawCard);
+            const existing = this.cards.get(card.id);
+            if (!existing || (card.updatedAt && card.updatedAt >= (existing.updatedAt || 0))) {
+              this.cards.set(card.id, card);
+            }
           }
           this.persistLocalOverrides();
-          console.log(`[CardRepository] Loaded ${data.cards.length} cards from Backend Master Registry`);
+          console.log(`[CardRepository] Synced ${data.cards.length} cards from Backend Master Registry`);
         }
       }
     } catch (err) {
@@ -221,11 +222,19 @@ export class CardRepository {
   }
 
   /** Push card update to Supabase & Backend server */
-  private async pushRemote(meta: CardMeta): Promise<void> {
+  private async pushRemote(meta: CardMeta): Promise<boolean> {
+    let supabaseSuccess = false;
     // 1. Push to Supabase PostgreSQL
-    upsertCardToSupabase(meta).catch((err) => {
-      console.warn("[CardRepository] Supabase push error:", err);
-    });
+    try {
+      supabaseSuccess = await upsertCardToSupabase(meta);
+      if (supabaseSuccess) {
+        console.log(`[CardRepository] Card "${meta.name}" (${meta.id}) successfully saved to Supabase.`);
+      } else {
+        console.error(`[CardRepository] Failed to upsert card "${meta.name}" (${meta.id}) to Supabase.`);
+      }
+    } catch (err) {
+      console.error("[CardRepository] Supabase push error:", err);
+    }
 
     // 2. Push to Node.js Backend REST endpoint
     try {
@@ -237,6 +246,8 @@ export class CardRepository {
     } catch (err) {
       console.warn("[CardRepository] Backend REST API push skipped:", err);
     }
+
+    return supabaseSuccess;
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -283,7 +294,7 @@ export class CardRepository {
 
   // ── Public Write API ──────────────────────────────────────────
 
-  public async updateCard(id: string, patch: Partial<CardMeta>): Promise<void> {
+  public async updateCard(id: string, patch: Partial<CardMeta>): Promise<boolean> {
     const existing = this.cards.get(id);
     const updated: CardMeta = existing
       ? { ...existing, ...patch, updatedAt: Date.now() }
@@ -305,16 +316,18 @@ export class CardRepository {
 
     this.cards.set(id, updated);
     this.persistLocalOverrides();
-    await this.pushRemote(updated);
+    const ok = await this.pushRemote(updated);
     this.notify();
+    return ok;
   }
 
-  public async upsertCard(meta: CardMeta): Promise<void> {
+  public async upsertCard(meta: CardMeta): Promise<boolean> {
     meta.updatedAt = Date.now();
     this.cards.set(meta.id, meta);
     this.persistLocalOverrides();
-    await this.pushRemote(meta);
+    const ok = await this.pushRemote(meta);
     this.notify();
+    return ok;
   }
 
   // ── Subscriptions ─────────────────────────────────────────────

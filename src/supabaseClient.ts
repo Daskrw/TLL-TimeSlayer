@@ -52,46 +52,122 @@ export const STORAGE_BUCKET = "card-art";
 
 // ── Database Operations: Cards ────────────────────────────────
 
+export function normalizeCardRow(row: any): CardMeta {
+  if (!row) {
+    return {
+      id: "CARD_UNKNOWN",
+      name: "Unknown Card",
+      cost: 1,
+      type: "UNIT" as any,
+      attack: 1,
+      hp: 1,
+      tribes: ["เป็นกลาง"],
+      tribe: "เป็นกลาง",
+      keywords: [],
+      text: "",
+      imageUrl: "",
+      updatedAt: Date.now(),
+    };
+  }
+
+  const rawTribes = Array.isArray(row.tribes)
+    ? row.tribes
+    : (row.tribe ? [row.tribe] : ["เป็นกลาง"]);
+  const rawKeywords = Array.isArray(row.keywords) ? row.keywords : [];
+  const text = row.text ?? row.description ?? "";
+  const imageUrl = row.imageUrl ?? row.image_url ?? "";
+
+  return {
+    id: String(row.id || "").trim(),
+    name: String(row.name || row.id || "Card").trim(),
+    cost: Number(row.cost ?? 1) || 0,
+    type: String(row.type || "UNIT").toUpperCase() as any,
+    attack: Number(row.attack ?? 0),
+    hp: Number(row.hp ?? 0),
+    tribes: rawTribes.length > 0 ? rawTribes : ["เป็นกลาง"],
+    tribe: row.tribe || rawTribes[0] || "เป็นกลาง",
+    keywords: rawKeywords,
+    text: String(text || ""),
+    imageUrl: String(imageUrl || ""),
+    updatedAt: Number(row.updatedAt ?? row.updated_at ?? Date.now()) || Date.now(),
+  };
+}
+
 export async function fetchCardsFromSupabase(): Promise<CardMeta[] | null> {
   try {
     const { data, error } = await supabase.from("cards").select("*");
     if (error) {
-      console.warn("[Supabase] Error fetching cards:", error.message);
+      console.error("[Supabase] Error fetching cards:", error.message, error);
       return null;
     }
-    return data as CardMeta[];
+    if (!data || !Array.isArray(data)) return [];
+    return data.map((row) => normalizeCardRow(row));
   } catch (err) {
-    console.warn("[Supabase] Failed to connect to cards table:", err);
+    console.error("[Supabase] Failed to connect to cards table:", err);
     return null;
   }
 }
 
 export async function upsertCardToSupabase(card: CardMeta): Promise<boolean> {
   try {
-    const { error } = await supabase.from("cards").upsert(
-      {
+    const payload: Record<string, any> = {
+      id: card.id,
+      name: card.name,
+      cost: card.cost ?? 1,
+      type: card.type || "UNIT",
+      attack: card.attack ?? null,
+      hp: card.hp ?? null,
+      tribes: card.tribes && card.tribes.length > 0 ? card.tribes : (card.tribe ? [card.tribe] : ["เป็นกลาง"]),
+      tribe: card.tribe || card.tribes?.[0] || "เป็นกลาง",
+      keywords: card.keywords || [],
+      text: card.text || null,
+      imageUrl: card.imageUrl || "",
+      updatedAt: card.updatedAt || Date.now(),
+    };
+
+    let { error } = await supabase.from("cards").upsert(payload, { onConflict: "id" });
+
+    // Fallback if schema was created with unquoted / snake_case column names
+    if (error && (error.message?.includes("column") || error.code === "PGRST204")) {
+      const snakePayload = {
         id: card.id,
         name: card.name,
-        cost: card.cost,
-        type: card.type,
+        cost: card.cost ?? 1,
+        type: card.type || "UNIT",
         attack: card.attack ?? null,
         hp: card.hp ?? null,
-        tribes: card.tribes || (card.tribe ? [card.tribe] : ["เป็นกลาง"]),
+        tribes: card.tribes && card.tribes.length > 0 ? card.tribes : (card.tribe ? [card.tribe] : ["เป็นกลาง"]),
         tribe: card.tribe || card.tribes?.[0] || "เป็นกลาง",
         keywords: card.keywords || [],
-        text: card.text || null,
-        imageUrl: card.imageUrl || "",
-        updatedAt: card.updatedAt || Date.now(),
-      },
-      { onConflict: "id" },
-    );
+        description: card.text || null,
+        image_url: card.imageUrl || "",
+        updated_at: card.updatedAt || Date.now(),
+      };
+      const retry = await supabase.from("cards").upsert(snakePayload, { onConflict: "id" });
+      error = retry.error;
+    }
+
     if (error) {
-      console.warn("[Supabase] Error upserting card:", error.message);
+      console.error("[Supabase] Error upserting card:", error.message, error);
       return false;
     }
     return true;
   } catch (err) {
-    console.warn("[Supabase] Exception upserting card:", err);
+    console.error("[Supabase] Exception upserting card:", err);
+    return false;
+  }
+}
+
+export async function deleteCardFromSupabase(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("cards").delete().eq("id", id);
+    if (error) {
+      console.error("[Supabase] Error deleting card:", error.message, error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[Supabase] Exception deleting card:", err);
     return false;
   }
 }

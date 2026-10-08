@@ -932,10 +932,30 @@ export class AdminCardView {
       ...(text ? { text } : {}),
     };
 
-    await cardRepo.updateCard(this.editingCard.id, patch);
+    const saveBtn = this.cardModal.querySelector("#adm-btn-save-card") as HTMLButtonElement;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Publishing to Supabase...";
+    }
 
-    this.closeCardModal();
-    this.showToast(`✅ "${name || this.editingCard.name}" saved & published!`);
+    try {
+      const ok = await cardRepo.updateCard(this.editingCard.id, patch);
+      this.closeCardModal();
+      this.render();
+      if (ok) {
+        this.showToast(`✅ "${name || this.editingCard.name}" saved & published to Supabase!`);
+      } else {
+        this.showToast(`⚠️ "${name || this.editingCard.name}" saved locally, but failed to write to Supabase (check RLS/network).`);
+      }
+    } catch (err: any) {
+      console.error("[AdminCardView] saveCard error:", err);
+      this.showToast(`⚠️ Error saving card: ${err?.message || err}`);
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "💾 Save & Publish";
+      }
+    }
   }
 
   // ── Hero Editor Modal ────────────────────────────────────────
