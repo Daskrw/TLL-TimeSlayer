@@ -261,7 +261,7 @@ export class DeckBuilderUI {
     await heroRepo.whenReady();
     DeckStorage.seedDefaults();
     this.setupListeners();
-    const allHeroes = heroRepo.getAllHeroes();
+    const allHeroes = heroRepo.getActiveHeroes();
     this.heroes = allHeroes.length > 0 ? allHeroes.map((h) => this.getSafeHero(h)) : [];
     const initialHero = (hero && this.heroes.find((h) => h.id === hero.id)) ? hero : (this.heroes[0] || hero);
     this.hero = this.getSafeHero(initialHero);

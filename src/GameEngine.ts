@@ -1702,37 +1702,37 @@ export class GameEngine {
         meter.superBlockTriggered = true;
 
         // Auto-Draw Superpower Card:
-        // Select 1 random Superpower/Hero Ability card from pool and override cost to 0
+        // Select 1 random Superpower/Hero Ability card from pool preserving original catalog cost
         let superpower: Card;
         if (targetPlayer.availableSuperpowers.length > 0) {
           const spIdx = Math.floor(this.prng() * targetPlayer.availableSuperpowers.length);
-          superpower = { ...targetPlayer.availableSuperpowers.splice(spIdx, 1)[0]!, cost: 0 };
+          superpower = { ...targetPlayer.availableSuperpowers.splice(spIdx, 1)[0]! };
         } else {
           const kitPool = targetPlayer.hero.superpowerKit
             ? [targetPlayer.hero.superpowerKit.signatureAbility, ...targetPlayer.hero.superpowerKit.coreAbilities]
             : (targetPlayer.hero.superpowers || []);
           const baseSp = kitPool[Math.floor(this.prng() * kitPool.length)]!;
-          superpower = { ...baseSp, cost: 0 };
+          superpower = { ...baseSp };
         }
 
         // Hand Limit Bypass: add directly to hand even if at or over 11 cards
         targetPlayer.hand.push(superpower);
 
-        this.emit(events, GameEventType.SUPER_BLOCK_TRIGGER, `SUPER BLOCK ACTIVATED! ${targetHeroId} negates the attack to 0! Drew Superpower "${superpower.name}" (0 Cost). ${carryOver} charges carried over.`, {
+        this.emit(events, GameEventType.SUPER_BLOCK_TRIGGER, `SUPER BLOCK ACTIVATED! ${targetHeroId} negates the attack to 0! Drew Superpower "${superpower.name}" (Cost ${superpower.cost}). ${carryOver} charges carried over.`, {
           playerId: targetHeroId,
           roll,
           overflowCarriedOver: carryOver,
           triggerCount: meter.triggerCount,
           superpowerId: superpower.id,
           superpowerName: superpower.name,
-          cost: 0,
+          cost: superpower.cost,
         });
 
-        this.emit(events, GameEventType.CARD_DRAWN, `${targetHeroId} drew Superpower "${superpower.name}" (0 Cost) directly into hand.`, {
+        this.emit(events, GameEventType.CARD_DRAWN, `${targetHeroId} drew Superpower "${superpower.name}" (Cost ${superpower.cost}) directly into hand.`, {
           playerId: targetHeroId,
           cardId: superpower.id,
           cardName: superpower.name,
-          cost: 0,
+          cost: superpower.cost,
           bypassedHandLimit: targetPlayer.hand.length > 11,
         });
 

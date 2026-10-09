@@ -35,6 +35,7 @@ export const DEFAULT_HEROES: HeroDefinition[] = [
     allowedTribes: ["ปัญญา", "จอมพล", "จู่โจม", "รักษา", "พิทักษ์", "ยุทธศาสตร์", "จอมอาคม", "เป็นกลาง"],
     signatureAbilityCardId: "card_sp_shield_of_legend",
     coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
+    isActive: true,
     updatedAt: 0,
   },
 ];

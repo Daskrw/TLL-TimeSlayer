@@ -321,6 +321,13 @@ export class AdminCardView {
 
               <!-- Right: Hero Fields & 4-Card Superpower Kit -->
               <div class="adm-editor-right">
+                <div class="adm-row" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                  <label class="adm-kw-chip" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:6px;">
+                    <input type="checkbox" id="adm-hero-field-active" checked />
+                    <span style="font-weight:700;color:#34d399;">Active in Game</span>
+                  </label>
+                  <span style="font-size:12px;color:#94a3b8;">(Uncheck to hide hero from player match &amp; deck selection)</span>
+                </div>
                 <div class="adm-row adm-row--2col">
                   <div>
                     <label class="adm-label">Hero ID</label>
@@ -776,13 +783,19 @@ export class AdminCardView {
       const c2 = cardRepo.getCard(h.coreAbilityCardIds[1]);
       const c3 = cardRepo.getCard(h.coreAbilityCardIds[2]);
 
+      const isActive = h.isActive !== false;
+      const statusBadge = isActive
+        ? `<span class="adm-hero-status-badge active" style="background:#065f46;color:#34d399;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:800;border:1px solid #059669;letter-spacing:0.5px;">ACTIVE</span>`
+        : `<span class="adm-hero-status-badge inactive" style="background:#7f1d1d;color:#fca5a5;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:800;border:1px solid #dc2626;letter-spacing:0.5px;">INACTIVE</span>`;
+
       tile.innerHTML = `
         <div class="adm-hero-tile-header">
           <div class="adm-hero-tile-avatar">${avatarHtml}</div>
           <div class="adm-hero-tile-info">
             <div class="adm-hero-tile-name">${h.name}</div>
             <div class="adm-hero-tile-title">${h.title}</div>
-            <div class="adm-hero-tile-badges">
+            <div class="adm-hero-tile-badges" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
+              ${statusBadge}
               <span class="adm-hero-hp-badge">❤️ ${h.maxHp} HP</span>
               ${h.allowedTribes.map(tr => `<span class="adm-hero-tr-tag">${tr}</span>`).join("")}
             </div>
@@ -796,12 +809,12 @@ export class AdminCardView {
           <div class="adm-hero-kit-item signature">
             <span class="badge">⭐ SIGNATURE</span>
             <span class="name">${sigCard ? sigCard.name : h.signatureAbilityCardId}</span>
-            <span class="cost">0 Mana</span>
+            <span class="cost">${sigCard ? sigCard.cost : 0} Mana</span>
           </div>
           <div class="adm-hero-kit-cores">
-            <div class="adm-hero-kit-item core"><span class="badge">CORE</span> ${c1 ? c1.name : h.coreAbilityCardIds[0]}</div>
-            <div class="adm-hero-kit-item core"><span class="badge">CORE</span> ${c2 ? c2.name : h.coreAbilityCardIds[1]}</div>
-            <div class="adm-hero-kit-item core"><span class="badge">CORE</span> ${c3 ? c3.name : h.coreAbilityCardIds[2]}</div>
+            <div class="adm-hero-kit-item core"><span class="badge">CORE</span> ${c1 ? `${c1.name} (${c1.cost} Mana)` : h.coreAbilityCardIds[0]}</div>
+            <div class="adm-hero-kit-item core"><span class="badge">CORE</span> ${c2 ? `${c2.name} (${c2.cost} Mana)` : h.coreAbilityCardIds[1]}</div>
+            <div class="adm-hero-kit-item core"><span class="badge">CORE</span> ${c3 ? `${c3.name} (${c3.cost} Mana)` : h.coreAbilityCardIds[2]}</div>
           </div>
         </div>
 
@@ -969,6 +982,7 @@ export class AdminCardView {
     titleEl.textContent = this.isNewHero ? "✨ Create New Hero" : `✏ Edit: ${heroDef!.name}`;
 
     const idInput = this.heroModal.querySelector("#adm-hero-field-id") as HTMLInputElement;
+    const activeInput = this.heroModal.querySelector("#adm-hero-field-active") as HTMLInputElement;
     const nameInput = this.heroModal.querySelector("#adm-hero-field-name") as HTMLInputElement;
     const titleInput = this.heroModal.querySelector("#adm-hero-field-title") as HTMLInputElement;
     const hpInput = this.heroModal.querySelector("#adm-hero-field-hp") as HTMLInputElement;
@@ -976,7 +990,10 @@ export class AdminCardView {
     const portraitInput = this.heroModal.querySelector("#adm-hero-field-portrait") as HTMLInputElement;
 
     idInput.value = heroDef?.id ?? `HERO_${Date.now().toString(36).toUpperCase()}`;
-    idInput.readOnly = !this.isNewHero && heroRepo.isDefaultHero(heroDef!.id);
+    idInput.readOnly = !this.isNewHero;
+    if (activeInput) {
+      activeInput.checked = heroDef ? heroDef.isActive !== false : true;
+    }
     nameInput.value = heroDef?.name ?? "";
     titleInput.value = heroDef?.title ?? "";
     hpInput.value = String(heroDef?.maxHp ?? 20);
@@ -1135,6 +1152,9 @@ export class AdminCardView {
       allowedTribes.push(chk.value);
     });
 
+    const activeInput = this.heroModal.querySelector("#adm-hero-field-active") as HTMLInputElement;
+    const isActive = activeInput ? activeInput.checked : true;
+
     const sigId = sigSel.value;
     const c1Id = c1Sel.value;
     const c2Id = c2Sel.value;
@@ -1150,6 +1170,7 @@ export class AdminCardView {
       allowedTribes: allowedTribes.length > 0 ? allowedTribes : ["Neutral"],
       signatureAbilityCardId: sigId,
       coreAbilityCardIds: [c1Id, c2Id, c3Id],
+      isActive,
       updatedAt: Date.now(),
     };
 

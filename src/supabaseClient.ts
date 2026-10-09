@@ -17,13 +17,16 @@ export interface CardMeta extends CardDefinition {
 // We support both Vite (import.meta.env) and Node (process.env) contexts.
 
 function resolveEnv(key: string): string {
-  // Vite client bundle (import.meta.env.*)
-  const viteVal = typeof import.meta !== "undefined" ? (import.meta as any).env?.[key] : undefined;
-  if (viteVal) return viteVal;
+  // Vite client bundle (import.meta.env.*) safely accessed across module formats
+  try {
+    const metaEnv = (new Function("try { return import.meta.env; } catch { return undefined; }"))();
+    if (metaEnv && metaEnv[key]) return metaEnv[key];
+  } catch {}
 
   // Node.js server / Jest
-  const nodeVal = typeof process !== "undefined" ? process.env?.[key] : undefined;
-  if (nodeVal) return nodeVal;
+  if (typeof process !== "undefined" && process.env && process.env[key]) {
+    return process.env[key]!;
+  }
 
   return "";
 }
@@ -186,6 +189,7 @@ export function normalizeHeroRow(row: any): HeroDefinition {
       allowedTribes: ["เป็นกลาง"],
       signatureAbilityCardId: "",
       coreAbilityCardIds: ["SP_AERIAL_SURGE", "SP_TAILWIND_DRAFT", "SP_GLACIAL_GALE"],
+      isActive: true,
       updatedAt: Date.now(),
     };
   }
@@ -195,6 +199,9 @@ export function normalizeHeroRow(row: any): HeroDefinition {
   const rawCores = Array.isArray(row.coreAbilityCardIds ?? row.core_ability_card_ids)
     ? (row.coreAbilityCardIds ?? row.core_ability_card_ids)
     : [];
+
+  const rawActive = row.isActive ?? row.is_active;
+  const isActive = rawActive === undefined || rawActive === null ? true : Boolean(rawActive);
 
   return {
     id: String(row.id || "").trim(),
@@ -212,6 +219,7 @@ export function normalizeHeroRow(row: any): HeroDefinition {
       String(rawCores[1] || "SP_TAILWIND_DRAFT"),
       String(rawCores[2] || "SP_GLACIAL_GALE"),
     ],
+    isActive,
     updatedAt: Number(row.updatedAt ?? row.updated_at ?? Date.now()) || Date.now(),
   };
 }
@@ -263,6 +271,8 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
       ? "🧙"
       : hero.portraitUrl;
 
+    const isActive = hero.isActive !== false;
+
     const payload: Record<string, any> = {
       id: hero.id,
       name: hero.name,
@@ -273,6 +283,7 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
       allowedTribes: hero.allowedTribes || [],
       signatureAbilityCardId: hero.signatureAbilityCardId || "",
       coreAbilityCardIds: hero.coreAbilityCardIds || [],
+      isActive,
       updatedAt: hero.updatedAt || Date.now(),
     };
 
@@ -290,6 +301,7 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
         allowed_tribes: hero.allowedTribes || [],
         signature_ability_card_id: hero.signatureAbilityCardId || "",
         core_ability_card_ids: hero.coreAbilityCardIds || [],
+        is_active: isActive,
         updated_at: hero.updatedAt || Date.now(),
       };
       const retry = await supabase.from("heroes").upsert(snakePayload, { onConflict: "id" });

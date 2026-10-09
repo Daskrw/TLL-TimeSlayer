@@ -41,6 +41,7 @@ export const DEFAULT_HERO_DEFINITIONS: HeroDefinition[] = [
     allowedTribes: ["ปัญญา", "จอมพล", "จู่โจม", "รักษา", "พิทักษ์", "ยุทธศาสตร์", "จอมอาคม", "เป็นกลาง"],
     signatureAbilityCardId: "card_sp_shield_of_legend",
     coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
+    isActive: true,
     updatedAt: 0,
   },
 ];
@@ -240,12 +241,20 @@ export class HeroRepository {
     return Array.from(this.heroDefs.values());
   }
 
+  public getActiveHeroDefinitions(): HeroDefinition[] {
+    return Array.from(this.heroDefs.values()).filter((def) => def.isActive !== false);
+  }
+
   public getHeroDefinition(id: string): HeroDefinition | undefined {
     return this.heroDefs.get(id);
   }
 
   public getAllHeroes(): Hero[] {
     return Array.from(this.heroDefs.values()).map((def) => this.hydrateHero(def));
+  }
+
+  public getActiveHeroes(): Hero[] {
+    return this.getActiveHeroDefinitions().map((def) => this.hydrateHero(def));
   }
 
   public getHero(id: string): Hero | undefined {
@@ -284,6 +293,7 @@ export class HeroRepository {
       startingHp: def.maxHp || 20,
       allowedTribes: [...def.allowedTribes],
       tribeSynergies: [...def.allowedTribes],
+      isActive: def.isActive !== false,
       superpowerKit,
       get superpowers(): readonly Card[] {
         return [this.superpowerKit.signatureAbility, ...this.superpowerKit.coreAbilities];

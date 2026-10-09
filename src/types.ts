@@ -253,6 +253,7 @@ export interface Hero {
   readonly maxHp: number; // default: 20
   readonly superpowerKit: SuperpowerKit;
   // Backward compatibility / convenience properties
+  readonly isActive?: boolean;
   readonly allowedTribes?: readonly string[];
   readonly startingHp?: number;
   readonly tribeSynergies?: readonly string[];
@@ -270,6 +271,7 @@ export interface HeroDefinition {
   allowedTribes: string[]; // Tribes this hero can build decks with
   signatureAbilityCardId: string; // References 1 specific Card ID
   coreAbilityCardIds: [string, string, string]; // References 3 Card IDs
+  isActive?: boolean; // Active in game (default: true)
   updatedAt: number;
 }
 

@@ -287,18 +287,18 @@ export class GameController {
     networkService.leaveMatch();
     networkService.isOnlineMode = false;
     await heroRepo.whenReady();
-    const heroes = heroRepo.getAllHeroes();
+    const heroes = heroRepo.getActiveHeroes();
 
-    this.overlay.showHeroSelection(heroes, (playerHeroChoice, oppHeroChoice) => {
+    this.overlay.showHeroSelection(heroes.length > 0 ? heroes : heroRepo.getAllHeroes(), (playerHeroChoice, oppHeroChoice) => {
       this.showDeckBuilder(playerHeroChoice, oppHeroChoice);
     });
   }
 
   public async startOnlineLoadoutFlow(roomId: string, _role: "p1" | "p2"): Promise<void> {
     await heroRepo.whenReady();
-    const heroes = heroRepo.getAllHeroes();
+    const heroes = heroRepo.getActiveHeroes();
 
-    this.overlay.showHeroSelection(heroes, (playerHeroChoice) => {
+    this.overlay.showHeroSelection(heroes.length > 0 ? heroes : heroRepo.getAllHeroes(), (playerHeroChoice) => {
       this.deckBuilder.show(
         playerHeroChoice,
         async (chosenDeck, selectedHero) => {

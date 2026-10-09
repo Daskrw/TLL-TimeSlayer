@@ -278,8 +278,8 @@ export class ScreenController {
       }
 
       case "DECK_BUILDER": {
-        const heroes = heroRepo.getAllHeroes();
-        const hero = heroes[0];
+        const heroes = heroRepo.getActiveHeroes();
+        const hero = heroes[0] || heroRepo.getAllHeroes()[0];
         this.deckBuilder.show(
           hero,
           () => {

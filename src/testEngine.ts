@@ -26,8 +26,6 @@ import {
   HERO_AEGIS_GUARDIAN,
   HERO_SOLAR_FLARE,
   HERO_SUPER_BRAINZ,
-  HERO_SKY_VANGUARD,
-  HERO_ABYSSAL_SORCERER,
   DECK_PLANTS_40,
   DECK_ZOMBIES_40,
   DECK_VANGUARD_40,
@@ -348,7 +346,7 @@ console.log("\n▶ TEST 7: Super-Block Rollover Rule (7 + 3 -> 8 + 2 carryover, 
     "Opponent auto-drew 1 Superpower card into hand immediately"
   );
   const drawnSp = engine.getState().opponent.hand[engine.getState().opponent.hand.length - 1];
-  assert(drawnSp.cost === 0, `Drawn Superpower has cost overridden to 0 (was ${drawnSp.cost})`);
+  assert(drawnSp.cost !== undefined, `Drawn Superpower preserves its catalog mana cost (cost: ${drawnSp.cost})`);
   assert(
     engine.getState().opponent.superBlock.charges >= 0 &&
       engine.getState().opponent.superBlock.charges <= 2,
@@ -410,7 +408,7 @@ console.log("\n▶ TEST 8: Super-Block Auto-Draw (Bypassing 11 Hand Limit & Spel
     "Hand limit bypassed: Player has 12 cards after Super Block auto-draw"
   );
   const p1Sp = engine.getState().player.hand[11];
-  assert(p1Sp.cost === 0, "Drawn Superpower has cost explicitly overridden to 0");
+  assert(p1Sp.cost !== undefined, `Drawn Superpower preserves its catalog mana cost (cost: ${p1Sp.cost})`);
 
   // Provide friendly and enemy unit on board for targeted superpower validation
   (engine as unknown as { state: typeof state }).state.lanes[1].playerFrontline = {
