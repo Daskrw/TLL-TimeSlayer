@@ -1254,6 +1254,27 @@ export class OverlayController {
         0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
         40% { transform: scale(1.2); opacity: 1; }
       }
+      .ws-cancel-btn {
+        margin-top: 14px;
+        padding: 9px 24px;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.45);
+        border-radius: 99px;
+        color: #fca5a5;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        z-index: 2;
+      }
+      .ws-cancel-btn:hover {
+        background: rgba(239, 68, 68, 0.35);
+        border-color: #ef4444;
+        color: #ffffff;
+        box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+        transform: translateY(-1px);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1908,6 +1929,9 @@ export class OverlayController {
     this.gameOverModal.classList.add("visible");
   }
 
+  private waitingSyncCancelCb?: () => void;
+  private waitingSyncTimeout?: any;
+
   // ── Build Dedicated Waiting & Match Sync UI ─────────────────
 
   private buildWaitingSyncUI(): void {
@@ -1927,6 +1951,7 @@ export class OverlayController {
           <div class="ws-dot"></div>
           <div class="ws-dot"></div>
         </div>
+        <button id="ws-btn-cancel" class="ws-cancel-btn">✕ Leave / Return to Menu</button>
       </div>
     `;
     document.body.appendChild(modal);
@@ -1935,14 +1960,36 @@ export class OverlayController {
     this.waitingSyncTitle = modal.querySelector("#ws-title") as HTMLElement;
     this.waitingSyncSubtitle = modal.querySelector("#ws-subtitle") as HTMLElement;
     this.waitingSyncSpinner = modal.querySelector(".ws-spinner-ring") as HTMLElement;
+
+    const cancelBtn = modal.querySelector("#ws-btn-cancel") as HTMLButtonElement;
+    cancelBtn?.addEventListener("click", () => {
+      this.hideWaitingOverlay();
+      this.waitingSyncCancelCb?.();
+    });
   }
 
   public showWaitingOverlay(
     title: string = "Waiting for Opponent to choose Hero & Deck...",
     subtitle: string = "Please wait while both champions lock in their battle loadouts.",
+    onCancel?: () => void,
   ): void {
     if (this.waitingSyncTitle) this.waitingSyncTitle.textContent = title;
     if (this.waitingSyncSubtitle) this.waitingSyncSubtitle.textContent = subtitle;
+    this.waitingSyncCancelCb = onCancel;
+
+    if (this.waitingSyncTimeout) {
+      clearTimeout(this.waitingSyncTimeout);
+      this.waitingSyncTimeout = null;
+    }
+
+    // Safety timeout: If waiting > 30s, update status advice
+    this.waitingSyncTimeout = setTimeout(() => {
+      if (this.isWaitingOverlayVisible() && this.waitingSyncSubtitle) {
+        this.waitingSyncSubtitle.textContent =
+          "Sync is taking longer than expected. Opponent may still be choosing cards, or disconnected. You can continue waiting or cancel.";
+      }
+    }, 30000);
+
     this.waitingSyncOverlay.style.pointerEvents = "all";
     this.waitingSyncOverlay.style.display = "flex";
     requestAnimationFrame(() => {
@@ -1950,7 +1997,17 @@ export class OverlayController {
     });
   }
 
+  public updateWaitingOverlay(title: string, subtitle?: string): void {
+    if (this.waitingSyncTitle) this.waitingSyncTitle.textContent = title;
+    if (subtitle && this.waitingSyncSubtitle) this.waitingSyncSubtitle.textContent = subtitle;
+  }
+
   public hideWaitingOverlay(): void {
+    if (this.waitingSyncTimeout) {
+      clearTimeout(this.waitingSyncTimeout);
+      this.waitingSyncTimeout = null;
+    }
+    this.waitingSyncCancelCb = undefined;
     if (this.waitingSyncOverlay) {
       this.waitingSyncOverlay.classList.remove("visible");
       this.waitingSyncOverlay.style.display = "none";

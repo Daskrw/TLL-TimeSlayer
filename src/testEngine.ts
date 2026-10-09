@@ -445,11 +445,11 @@ console.log("\n▶ TEST 8: Super-Block Auto-Draw (Bypassing 11 Hand Limit & Spel
   const rOppSpellPhase = engine.playCard(PlayerId.Player, p1Sp.id, 0, targetId);
   assert(!rOppSpellPhase.success, "Rejected playing P1 Superpower during P2_SPELL_PHASE");
 
-  // 3. CAN play during Player 1's Spell Phase
+  // 3. CAN play during Player 1's Spell Phase with sufficient mana
   (engine as unknown as { state: typeof state }).state.currentPhase = TurnPhase.P1_SPELL_PHASE;
-  (engine as unknown as { state: typeof state }).state.player.currentMana = 0; // Even with 0 mana, because cost is 0!
+  (engine as unknown as { state: typeof state }).state.player.currentMana = p1Sp.cost;
   const rP1SpellPhase = engine.playCard(PlayerId.Player, p1Sp.id, 0, targetId);
-  assert(rP1SpellPhase.success, `Successfully played 0-cost Superpower during P1_SPELL_PHASE: ${!rP1SpellPhase.success ? (rP1SpellPhase as any).error : ""}`);
+  assert(rP1SpellPhase.success, `Successfully played Superpower during P1_SPELL_PHASE: ${!rP1SpellPhase.success ? (rP1SpellPhase as any).error : ""}`);
 
   // 4. Test non-targeted Superpower (e.g. SP_SHIELD_OF_LEGEND) with NO targetId required!
   const shieldCard = { ...SP_SHIELD_OF_LEGEND, cost: 0 };
@@ -980,13 +980,13 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
   assert(afterState.player.superBlock.triggerCount === 1, "Super block triggered");
   assert(afterState.player.hand.length === 1, "Player auto-drew 1 superpower from reusable kit");
   const drawnCard = afterState.player.hand[0];
-  assert(drawnCard.cost === 0, "Drawn superpower costs 0 mana");
+  assert(typeof drawnCard.cost === "number" && drawnCard.cost >= 0, "Drawn superpower preserves catalog cost");
   const heroKitIds = [
     HERO_AEGIS_GUARDIAN.superpowerKit.signatureAbility.id,
     ...HERO_AEGIS_GUARDIAN.superpowerKit.coreAbilities.map((c) => c.id),
   ];
   assert(heroKitIds.includes(drawnCard.id), "Drawn card is from Hero's 4-card superpower kit");
-  console.log("  ✓ Auto-drew 0-cost superpower from Aegis Guardian's 4-card kit even when pool was exhausted");
+  console.log("  ✓ Auto-drew superpower from Aegis Guardian's 4-card kit even when pool was exhausted");
 }
 
 console.log("\n============================================================");

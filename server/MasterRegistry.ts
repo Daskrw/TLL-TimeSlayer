@@ -5,8 +5,15 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { CardDefinition, HeroDefinition } from "../src/types";
-import { ALL_STATIC_CARDS } from "../src/cards";
+import { Card, CardDefinition, HeroDefinition, Hero, SuperpowerKit } from "../src/types";
+import {
+  ALL_STATIC_CARDS,
+  getStaticCardById,
+  SP_SHIELD_OF_LEGEND,
+  SP_HUMAN_SHIELD,
+  SP_SUPPRESS_ANGER,
+  SP_LEAVE_TO_DUST,
+} from "../src/cards";
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -104,8 +111,11 @@ export class MasterRegistry {
 
         // Populate cards
         for (const card of data.cards || []) {
+          const rawCost = Number(card.cost);
+          const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : (card.cost ?? 0);
           this.cardsMap.set(card.id, {
             ...card,
+            cost: typeof cost === "number" ? cost : 0,
             tribes: card.tribes && card.tribes.length > 0 ? card.tribes : (card.tribe ? [card.tribe] : ["เป็นกลาง"]),
             tribe: card.tribe || card.tribes?.[0] || "เป็นกลาง",
             imageUrl: card.imageUrl || "",
@@ -116,25 +126,34 @@ export class MasterRegistry {
         // Seed any missing static cards
         for (const staticCard of ALL_STATIC_CARDS) {
           if (!this.cardsMap.has(staticCard.id)) {
+            const rawCost = Number(staticCard.cost);
+            const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : (staticCard.cost ?? 0);
             this.cardsMap.set(staticCard.id, {
               ...staticCard,
+              cost: typeof cost === "number" ? cost : 0,
               imageUrl: "",
               updatedAt: 0,
             });
           }
         }
 
-        // Populate heroes (excluding legacy ones)
+        // Populate heroes (excluding legacy ones, ensuring isActive is true by default)
         for (const hero of data.heroes || []) {
           if (!LEGACY_HERO_IDS.has(hero.id)) {
-            this.heroesMap.set(hero.id, { ...hero });
+            this.heroesMap.set(hero.id, {
+              ...hero,
+              isActive: hero.isActive !== false,
+            });
           }
         }
 
         // Seed any missing default heroes
         for (const defaultHero of DEFAULT_HEROES) {
           if (!this.heroesMap.has(defaultHero.id)) {
-            this.heroesMap.set(defaultHero.id, { ...defaultHero });
+            this.heroesMap.set(defaultHero.id, {
+              ...defaultHero,
+              isActive: defaultHero.isActive !== false,
+            });
           }
         }
 
@@ -209,8 +228,57 @@ export class MasterRegistry {
     return Array.from(this.cardsMap.values());
   }
 
-  public getHero(id: string): HeroDefinition | undefined {
-    return this.heroesMap.get(id);
+  public getHero(idOrName: string): HeroDefinition | undefined {
+    if (!idOrName) return undefined;
+    const direct = this.heroesMap.get(idOrName);
+    if (direct) return direct;
+    const lower = idOrName.toLowerCase().trim();
+    for (const h of this.heroesMap.values()) {
+      if (h.id.toLowerCase() === lower || h.name.toLowerCase() === lower) {
+        return h;
+      }
+    }
+    return undefined;
+  }
+
+  public getActiveHeroes(): HeroDefinition[] {
+    const active = Array.from(this.heroesMap.values()).filter((h) => h.isActive !== false);
+    return active.length > 0 ? active : Array.from(this.heroesMap.values());
+  }
+
+  public hydrateHero(def: HeroDefinition): Hero {
+    const sigCard = this.getCard(def.signatureAbilityCardId) || getStaticCardById(def.signatureAbilityCardId);
+    const coreCards = (def.coreAbilityCardIds || [])
+      .map((id) => this.getCard(id) || getStaticCardById(id))
+      .filter(Boolean);
+
+    const defaultCore: [Card, Card, Card] = [SP_HUMAN_SHIELD, SP_SUPPRESS_ANGER, SP_LEAVE_TO_DUST];
+    const coreAbilities: [Card, Card, Card] = [
+      ((coreCards[0] as Card) || defaultCore[0]),
+      ((coreCards[1] as Card) || defaultCore[1]),
+      ((coreCards[2] as Card) || defaultCore[2]),
+    ];
+
+    const superpowerKit: SuperpowerKit = {
+      signatureAbility: (sigCard as Card) || SP_SHIELD_OF_LEGEND,
+      coreAbilities,
+    };
+
+    return {
+      id: def.id,
+      name: def.name,
+      title: def.title,
+      description: def.description,
+      portraitUrl: def.portraitUrl,
+      maxHp: def.maxHp || 20,
+      startingHp: def.maxHp || 20,
+      allowedTribes: def.allowedTribes || ["เป็นกลาง"],
+      superpowerKit,
+      get superpowers() {
+        return [this.superpowerKit.signatureAbility, ...this.superpowerKit.coreAbilities];
+      },
+      isActive: def.isActive !== false,
+    };
   }
 
   public getAllHeroes(): HeroDefinition[] {

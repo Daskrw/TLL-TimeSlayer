@@ -66,9 +66,9 @@ export class GameSession {
     const p1 = this.room.players.p1!;
     const p2 = this.room.players.p2!;
 
-    const p1Hero = p1.hero || AVAILABLE_HEROES[0];
+    const p1Hero = (p1.hero && p1.hero.superpowerKit) ? p1.hero : AVAILABLE_HEROES[0];
     const p1Deck = p1.deck && p1.deck.length > 0 ? p1.deck : [...DECK_VANGUARD_40];
-    const p2Hero = p2.hero || AVAILABLE_HEROES[1] || AVAILABLE_HEROES[0];
+    const p2Hero = (p2.hero && p2.hero.superpowerKit) ? p2.hero : AVAILABLE_HEROES[0];
     const p2Deck = p2.deck && p2.deck.length > 0 ? p2.deck : [...DECK_ABYSSAL_40];
 
     this.engine.initializeGame(

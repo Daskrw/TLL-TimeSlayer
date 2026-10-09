@@ -294,7 +294,11 @@ export class GameController {
     });
   }
 
-  public async startOnlineLoadoutFlow(roomId: string, _role: "p1" | "p2"): Promise<void> {
+  public async startOnlineLoadoutFlow(roomId: string, role: "p1" | "p2"): Promise<void> {
+    networkService.roomId = roomId;
+    networkService.myRole = role;
+    networkService.isOnlineMode = true;
+
     await heroRepo.whenReady();
     const heroes = heroRepo.getActiveHeroes();
 
@@ -313,6 +317,10 @@ export class GameController {
           this.overlay.showWaitingOverlay(
             "Waiting for Opponent to choose Hero & Deck...",
             `Locked in as ${actualHero.name}. Synchronizing battle loadout with server...`,
+            () => {
+              networkService.leaveMatch();
+              this.handleBackToMenu();
+            },
           );
 
           const success = await networkService.lockInPlayer(actualHero, chosenDeck);
@@ -1305,6 +1313,11 @@ export class GameController {
           const oppReady = myRole === "p1" ? data.p2?.lockedIn || data.p2?.ready : data.p1?.lockedIn || data.p1?.ready;
           if (oppReady && !this.overlay.isWaitingOverlayVisible()) {
             this.showToast("Opponent has locked in their loadout!");
+          } else if (oppReady && this.overlay.isWaitingOverlayVisible()) {
+            this.overlay.updateWaitingOverlay(
+              "OPPONENT READY!",
+              "Both players locked in. Synchronizing battlefield with server..."
+            );
           }
         }
       },

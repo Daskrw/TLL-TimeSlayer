@@ -60,12 +60,16 @@ export function createCardInstance(definition: CardDefinition): CardInstance {
     ? [...definition.tribes]
     : (definition.tribe ? [definition.tribe] : ["เป็นกลาง"]);
 
+  const rawCost = Number(definition.cost);
+  const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : (typeof definition.cost === "number" ? definition.cost : 0);
+
   return {
     ...cloned,
+    cost,
     instanceId: `inst_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     currentAttack: definition.attack ?? 0,
     currentHp: definition.hp ?? 0,
-    currentCost: definition.cost ?? 0,
+    currentCost: cost,
     tribes: decoupledTribes,
     tribe: decoupledTribes[0] || definition.tribe || "เป็นกลาง",
     keywords: decoupledKeywords,

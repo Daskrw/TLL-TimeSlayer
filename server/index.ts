@@ -584,12 +584,32 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
 
     // Resolve Hero
     let actualHero: any = hero;
-    if (!actualHero && heroId) {
-      const regHero = masterRegistry.getHero(heroId);
-      actualHero = regHero || AVAILABLE_HEROES.find((h) => h.id === heroId) || AVAILABLE_HEROES[0];
+    const lookupId = heroId || (hero && (hero.id || hero.name));
+    if (lookupId) {
+      const regHero = masterRegistry.getHero(lookupId);
+      if (regHero) {
+        actualHero = masterRegistry.hydrateHero(regHero);
+      } else {
+        const found = AVAILABLE_HEROES.find(
+          (h) => h.id.toLowerCase() === String(lookupId).toLowerCase() || h.name.toLowerCase() === String(lookupId).toLowerCase(),
+        );
+        if (found) actualHero = found;
+      }
     }
+
+    if (actualHero && !actualHero.superpowerKit) {
+      actualHero = masterRegistry.hydrateHero(actualHero);
+    }
+
     if (!actualHero) {
-      actualHero = role === "p1" ? HERO_SKY_VANGUARD : HERO_ABYSSAL_SORCERER;
+      actualHero = AVAILABLE_HEROES[0];
+    }
+
+    // Safety fallback if chosen hero is inactive
+    if (actualHero.isActive === false) {
+      console.warn(`[SyncGate] Hero "${actualHero.name}" is marked inactive. Falling back to active default.`);
+      const activeDefs = masterRegistry.getActiveHeroes();
+      actualHero = activeDefs[0] ? masterRegistry.hydrateHero(activeDefs[0]) : AVAILABLE_HEROES[0];
     }
 
     // Resolve Deck
@@ -603,6 +623,13 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
       actualDeck = role === "p1" ? [...DECK_VANGUARD_40] : [...DECK_ABYSSAL_40];
     }
 
+    // Ensure all cards in deck have sanitized numeric costs
+    actualDeck = actualDeck.map((c) => {
+      const rawCost = Number(c.cost);
+      const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : (typeof c.cost === "number" ? c.cost : 0);
+      return { ...c, cost };
+    });
+
     // Mark player ready and locked in
     const slot = role === "p1" ? room.players.p1 : room.players.p2;
     if (slot) {
@@ -615,7 +642,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
     }
 
     console.log(
-      `[SyncGate] Player ${role.toUpperCase()} (${socket.id}) locked in for room ${targetRoomId}. P1: ${!!room.players.p1?.isLockedIn}, P2: ${!!room.players.p2?.isLockedIn}`,
+      `[SyncGate] Player ${role.toUpperCase()} (${socket.id}) locked in for room ${targetRoomId} with Hero: ${actualHero.name}. P1: ${!!room.players.p1?.isLockedIn}, P2: ${!!room.players.p2?.isLockedIn}`,
     );
 
     callback?.({ success: true });
@@ -657,8 +684,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
         const p1Sanitized = session.getSanitizedState("p1");
         const p2Sanitized = session.getSanitizedState("p2");
 
-        // Broadcast MATCH_INITIALIZED to BOTH sockets in the room
-        io.to(targetRoomId).emit("MATCH_INITIALIZED" as any, {
+        const initPayload = {
           roomId: targetRoomId,
           startingPhase: session.getState().currentPhase,
           p1Data: {
@@ -676,7 +702,12 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
           p1State: p1Sanitized,
           p2State: p2Sanitized,
           initialState: p1Sanitized,
-        });
+        };
+
+        // Broadcast MATCH_INITIALIZED to BOTH sockets in the room and directly
+        io.to(targetRoomId).emit("MATCH_INITIALIZED" as any, initPayload);
+        if (p1SocketId) io.to(p1SocketId).emit("MATCH_INITIALIZED" as any, initPayload);
+        if (p2SocketId) io.to(p2SocketId).emit("MATCH_INITIALIZED" as any, initPayload);
 
         // Deliver opening Mulligan hands to each player
         if (p1SocketId) {
@@ -703,9 +734,10 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
         });
       } catch (err: any) {
         console.error("[SyncGate Error] Failed to initialize engine:", err);
-        io.to(targetRoomId).emit("SYNC_ERROR" as any, {
-          message: "Engine initialization failed on server: " + (err?.message || String(err)),
-        });
+        const errorMsg = "Engine initialization failed on server: " + (err?.message || String(err));
+        io.to(targetRoomId).emit("SYNC_ERROR" as any, { message: errorMsg });
+        if (room.players.p1?.socketId) io.to(room.players.p1.socketId).emit("SYNC_ERROR" as any, { message: errorMsg });
+        if (room.players.p2?.socketId) io.to(room.players.p2.socketId).emit("SYNC_ERROR" as any, { message: errorMsg });
       }
     }
   };

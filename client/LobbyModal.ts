@@ -33,6 +33,7 @@ export class LobbyModal {
   private bannerEl!: HTMLElement;
   private btnLocalEl!: HTMLButtonElement;
   private btnOnlineEl!: HTMLButtonElement;
+  private hasTransitionedToMatch = false;
 
   constructor(callbacks: LobbyModalCallbacks) {
     this.callbacks = callbacks;
@@ -512,6 +513,7 @@ export class LobbyModal {
         const res = await networkService.joinRoom(code);
         if (res.success) {
           console.log("[LobbyModal] Joined room successfully:", code);
+          this.hasTransitionedToMatch = true;
           this.hideJoinError();
           this.hideModal();
           networkService.isOnlineMode = true;
@@ -527,19 +529,19 @@ export class LobbyModal {
       }
     });
 
-    // Network Service Room State Listener
-    networkService.setEventListeners({
-      onRoomState: (data) => {
-        if (data.p1 && data.p2) {
-          // Both connected! Transition into Hero Selection
-          this.statusTextEl.textContent = `Opponent connected! Entering match...`;
-          setTimeout(() => {
-            this.hideModal();
-            networkService.isOnlineMode = true;
-            this.callbacks.onOnlineRoomReady(data.roomId, networkService.myRole || "p1");
-          }, 800);
-        }
-      },
+    // Network Service Room State Listener (subscribe without overwriting other listeners)
+    networkService.onRoomState((data) => {
+      if (this.hasTransitionedToMatch) return;
+      if (data.p1 && data.p2) {
+        // Both connected! Transition into Hero Selection
+        this.hasTransitionedToMatch = true;
+        this.statusTextEl.textContent = `Opponent connected! Entering match...`;
+        setTimeout(() => {
+          this.hideModal();
+          networkService.isOnlineMode = true;
+          this.callbacks.onOnlineRoomReady(data.roomId, networkService.myRole || "p1");
+        }, 400);
+      }
     });
   }
 
@@ -590,6 +592,7 @@ export class LobbyModal {
   }
 
   public showModal(): void {
+    this.hasTransitionedToMatch = false;
     this.setupListeners();
     this.onlineLobbyOverlay.style.pointerEvents = "auto";
     this.onlineLobbyOverlay.style.display = "flex";

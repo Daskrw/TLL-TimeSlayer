@@ -106,8 +106,17 @@ export class NetworkService {
     return NetworkService.instance;
   }
 
+  private roomStateSubscribers: Array<(data: any) => void> = [];
+
   public setEventListeners(listeners: NetworkServiceEvents): void {
     this.listeners = { ...this.listeners, ...listeners };
+  }
+
+  public onRoomState(cb: (data: any) => void): () => void {
+    this.roomStateSubscribers.push(cb);
+    return () => {
+      this.roomStateSubscribers = this.roomStateSubscribers.filter((fn) => fn !== cb);
+    };
   }
 
   // ── Connection ───────────────────────────────────────────────
@@ -181,6 +190,13 @@ export class NetworkService {
     // Room state update
     this.socket.on("room_state", (data) => {
       this.listeners.onRoomState?.(data);
+      for (const sub of this.roomStateSubscribers) {
+        try {
+          sub(data);
+        } catch (e) {
+          console.error("[NetworkService] Error in room_state subscriber:", e);
+        }
+      }
     });
 
     // MATCH_INITIALIZED (Two-sided readiness gate synchronized start)
