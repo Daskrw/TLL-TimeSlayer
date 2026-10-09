@@ -238,27 +238,40 @@ export class HeroRepository {
   // ── Read API ──────────────────────────────────────────────────
 
   public getAllHeroDefinitions(): HeroDefinition[] {
-    return Array.from(this.heroDefs.values());
+    const list = Array.from(this.heroDefs.values());
+    if (list.length > 0) return list;
+    return [...DEFAULT_HERO_DEFINITIONS];
   }
 
   public getActiveHeroDefinitions(): HeroDefinition[] {
-    return Array.from(this.heroDefs.values()).filter((def) => def.isActive !== false);
+    const active = Array.from(this.heroDefs.values()).filter((def) => def.isActive !== false);
+    if (active.length > 0) return active;
+
+    // Fallback: if all were marked inactive or none found, fallback to all hero definitions
+    const all = this.getAllHeroDefinitions();
+    if (all.length > 0) return all;
+
+    return [...DEFAULT_HERO_DEFINITIONS];
   }
 
   public getHeroDefinition(id: string): HeroDefinition | undefined {
-    return this.heroDefs.get(id);
+    return this.heroDefs.get(id) || DEFAULT_HERO_DEFINITIONS.find((d) => d.id === id);
   }
 
   public getAllHeroes(): Hero[] {
-    return Array.from(this.heroDefs.values()).map((def) => this.hydrateHero(def));
+    const defs = this.getAllHeroDefinitions();
+    return defs.map((def) => this.hydrateHero(def));
   }
 
   public getActiveHeroes(): Hero[] {
-    return this.getActiveHeroDefinitions().map((def) => this.hydrateHero(def));
+    const activeDefs = this.getActiveHeroDefinitions();
+    const heroes = activeDefs.map((def) => this.hydrateHero(def));
+    if (heroes.length > 0) return heroes;
+    return this.getAllHeroes();
   }
 
   public getHero(id: string): Hero | undefined {
-    const def = this.heroDefs.get(id);
+    const def = this.getHeroDefinition(id);
     return def ? this.hydrateHero(def) : undefined;
   }
 
@@ -273,10 +286,14 @@ export class HeroRepository {
   // ── Hydration ─────────────────────────────────────────────────
 
   public hydrateHero(def: HeroDefinition): Hero {
-    const sigCard = findCard(def.signatureAbilityCardId);
-    const core1 = findCard(def.coreAbilityCardIds[0]);
-    const core2 = findCard(def.coreAbilityCardIds[1]);
-    const core3 = findCard(def.coreAbilityCardIds[2]);
+    if (!def) {
+      def = DEFAULT_HERO_DEFINITIONS[0];
+    }
+    const sigCard = findCard(def.signatureAbilityCardId || "card_sp_shield_of_legend");
+    const rawCores = Array.isArray(def.coreAbilityCardIds) ? def.coreAbilityCardIds : [];
+    const core1 = findCard(rawCores[0] || "card_sp_human_shield");
+    const core2 = findCard(rawCores[1] || "card_sp_suppress_anger");
+    const core3 = findCard(rawCores[2] || "card_sp_leave_to_dust");
 
     const superpowerKit: SuperpowerKit = {
       signatureAbility: sigCard,

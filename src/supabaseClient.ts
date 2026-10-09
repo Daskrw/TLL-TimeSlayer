@@ -17,30 +17,41 @@ export interface CardMeta extends CardDefinition {
 // We support both Vite (import.meta.env) and Node (process.env) contexts.
 
 function resolveEnv(key: string): string {
-  // Vite client bundle (import.meta.env.*) safely accessed across module formats
+  // 1. Vite client bundle (import.meta.env.*)
   try {
-    const metaEnv = (new Function("try { return import.meta.env; } catch { return undefined; }"))();
-    if (metaEnv && metaEnv[key]) return metaEnv[key];
+    if (typeof import.meta !== "undefined" && (import.meta as any).env) {
+      const val = (import.meta as any).env[key];
+      if (typeof val === "string" && val.trim() !== "") return val.trim();
+    }
   } catch {}
 
-  // Node.js server / Jest
-  if (typeof process !== "undefined" && process.env && process.env[key]) {
-    return process.env[key]!;
-  }
+  // 2. Node.js server / testing (process.env.*)
+  try {
+    if (typeof process !== "undefined" && process?.env) {
+      const val = process.env[key];
+      if (typeof val === "string" && val.trim() !== "") return val.trim();
+    }
+  } catch {}
 
   return "";
 }
 
-const supabaseUrl = resolveEnv("VITE_SUPABASE_URL");
-const supabaseAnonKey = resolveEnv("VITE_SUPABASE_ANON_KEY");
+const rawUrl = resolveEnv("VITE_SUPABASE_URL") || resolveEnv("SUPABASE_URL");
+const rawAnonKey = resolveEnv("VITE_SUPABASE_ANON_KEY") || resolveEnv("SUPABASE_ANON_KEY");
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  const missing: string[] = [];
-  if (!supabaseUrl) missing.push("VITE_SUPABASE_URL");
-  if (!supabaseAnonKey) missing.push("VITE_SUPABASE_ANON_KEY");
-  throw new Error(
-    `[supabaseClient] FATAL: Missing required environment variable(s): ${missing.join(", ")}. ` +
-    "Copy .env.example → .env and fill in your project credentials.",
+export const isSupabaseConfigured: boolean = Boolean(
+  rawUrl &&
+  rawAnonKey &&
+  !rawUrl.includes("placeholder")
+);
+
+const supabaseUrl = isSupabaseConfigured ? rawUrl : "https://placeholder.supabase.co";
+const supabaseAnonKey = isSupabaseConfigured ? rawAnonKey : "placeholder-anon-key";
+
+if (!isSupabaseConfigured) {
+  console.warn(
+    "[supabaseClient] Notice: Supabase credentials not found in environment. " +
+    "Running in offline / local catalogue fallback mode.",
   );
 }
 
@@ -97,6 +108,7 @@ export function normalizeCardRow(row: any): CardMeta {
 }
 
 export async function fetchCardsFromSupabase(): Promise<CardMeta[] | null> {
+  if (!isSupabaseConfigured) return null;
   try {
     const { data, error } = await supabase.from("cards").select("*");
     if (error) {
@@ -112,6 +124,7 @@ export async function fetchCardsFromSupabase(): Promise<CardMeta[] | null> {
 }
 
 export async function upsertCardToSupabase(card: CardMeta): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
   try {
     const payload: Record<string, any> = {
       id: card.id,
@@ -232,6 +245,7 @@ export const LEGACY_HERO_IDS = [
 ];
 
 export async function clearLegacyHeroesFromSupabase(): Promise<void> {
+  if (!isSupabaseConfigured) return;
   try {
     for (const legacyId of LEGACY_HERO_IDS) {
       await supabase.from("heroes").delete().eq("id", legacyId);
@@ -242,6 +256,7 @@ export async function clearLegacyHeroesFromSupabase(): Promise<void> {
 }
 
 export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null> {
+  if (!isSupabaseConfigured) return null;
   try {
     const { data, error } = await supabase.from("heroes").select("*");
     if (error) {
@@ -266,6 +281,7 @@ export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null
 }
 
 export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
   try {
     const safePortrait = (!hero.portraitUrl || hero.portraitUrl === "loading" || hero.portraitUrl === "Uploading...")
       ? "🧙"
@@ -320,6 +336,7 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
 }
 
 export async function deleteHeroFromSupabase(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabase.from("heroes").delete().eq("id", id);
     if (error) {
@@ -338,6 +355,10 @@ export async function deleteHeroFromSupabase(id: string): Promise<boolean> {
 export async function uploadAssetToSupabaseStorage(
   fileOrBase64: File | { filename: string; dataUrl: string },
 ): Promise<string | null> {
+  if (!isSupabaseConfigured) {
+    console.warn("[Supabase] Storage upload skipped: Supabase credentials not configured.");
+    return null;
+  }
   try {
     let fileBody: Blob | File;
     let filename: string;
