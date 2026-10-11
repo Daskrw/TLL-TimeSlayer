@@ -213,11 +213,23 @@ export function normalizeHeroRow(row: any): HeroDefinition {
     ? (row.coreAbilityCardIds ?? row.core_ability_card_ids)
     : [];
 
+  const rawId = String(row.id || "").trim();
+  const isLegacy = LEGACY_HERO_IDS.includes(rawId);
   const rawActive = row.isActive ?? row.is_active;
-  const isActive = rawActive === undefined || rawActive === null ? true : Boolean(rawActive);
+  let isActive: boolean;
+  if (typeof rawActive === "boolean") {
+    isActive = rawActive;
+  } else if (rawActive === undefined || rawActive === null) {
+    // Explicit Compatibility Rule:
+    // Legacy records with missing/null active status default to false (inactive).
+    // Non-legacy / custom hero records default to true (active).
+    isActive = !isLegacy;
+  } else {
+    isActive = Boolean(rawActive);
+  }
 
   return {
-    id: String(row.id || "").trim(),
+    id: rawId,
     name: String(row.name || row.id || "Hero").trim(),
     title: String(row.title ?? "").trim(),
     description: String(row.description ?? "").trim(),
@@ -244,15 +256,9 @@ export const LEGACY_HERO_IDS = [
   "HERO_SUPER_BRAINZ",
 ];
 
+/** Preserved for backwards compatibility; does not delete heroes */
 export async function clearLegacyHeroesFromSupabase(): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  try {
-    for (const legacyId of LEGACY_HERO_IDS) {
-      await supabase.from("heroes").delete().eq("id", legacyId);
-    }
-  } catch (err) {
-    console.warn("[Supabase] Failed to clear legacy heroes:", err);
-  }
+  // Intentionally no-op: legacy heroes must not be deleted from Supabase
 }
 
 export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null> {
@@ -264,16 +270,8 @@ export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null
       return null;
     }
     if (!data || !Array.isArray(data)) return [];
-    
-    // Check if any legacy heroes exist and clean them up
-    const hasLegacy = data.some((row) => LEGACY_HERO_IDS.includes(row.id));
-    if (hasLegacy) {
-      clearLegacyHeroesFromSupabase().catch(() => {});
-    }
 
-    return data
-      .filter((row) => !LEGACY_HERO_IDS.includes(row.id))
-      .map((row) => normalizeHeroRow(row));
+    return data.map((row) => normalizeHeroRow(row));
   } catch (err) {
     console.error("[Supabase] Failed to connect to heroes table:", err);
     return null;
@@ -322,6 +320,14 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
       };
       const retry = await supabase.from("heroes").upsert(snakePayload, { onConflict: "id" });
       error = retry.error;
+
+      // Fallback 2: if table schema has neither isActive nor is_active column
+      if (error && (error.message?.includes("column") || error.code === "PGRST204")) {
+        const noActivePayload = { ...payload };
+        delete noActivePayload.isActive;
+        const retry3 = await supabase.from("heroes").upsert(noActivePayload, { onConflict: "id" });
+        error = retry3.error;
+      }
     }
 
     if (error) {

@@ -18,6 +18,7 @@ import {
   deleteHeroFromSupabase,
   normalizeHeroRow,
   supabase,
+  isSupabaseConfigured,
 } from "../src/supabaseClient";
 
 // ─────────────────────────────────────────────────────────────
@@ -42,6 +43,58 @@ export const DEFAULT_HERO_DEFINITIONS: HeroDefinition[] = [
     signatureAbilityCardId: "card_sp_shield_of_legend",
     coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
     isActive: true,
+    updatedAt: 0,
+  },
+  {
+    id: "HERO_SKY_VANGUARD",
+    name: "Sky Vanguard",
+    title: "The Aerial Ace",
+    description: "Master of the skies, swooping down with precision aerial strikes and swift tactical movement.",
+    maxHp: 20,
+    portraitUrl: "🦅",
+    allowedTribes: ["Aerial", "Vanguard", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_SKY_STRIKE",
+    coreAbilityCardIds: ["SP_AERIAL_SURGE", "SP_TAILWIND_DRAFT", "SP_GLACIAL_GALE"],
+    isActive: false,
+    updatedAt: 0,
+  },
+  {
+    id: "HERO_ABYSSAL_SORCERER",
+    name: "Abyssal Sorcerer",
+    title: "Tidecaller of the Deep",
+    description: "Channels the dark currents of the deep abyss to flood enemy lanes and crush opponents with oceanic power.",
+    maxHp: 20,
+    portraitUrl: "🌊",
+    allowedTribes: ["Aquatic", "Mystic", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_TIDAL_WAVE",
+    coreAbilityCardIds: ["SP_SOOTHING_CURRENT", "SP_CORAL_AEGIS", "SP_AQUATIC_CONJURATION"],
+    isActive: false,
+    updatedAt: 0,
+  },
+  {
+    id: "HERO_SOLAR_FLARE",
+    name: "Solar Flare",
+    title: "The Radiant Sunburst",
+    description: "Draws searing solar energy to burn down enemy units and illuminate victory.",
+    maxHp: 20,
+    portraitUrl: "🌻",
+    allowedTribes: ["Kabloom", "Solar", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_SUNBURN",
+    coreAbilityCardIds: ["SP_WEED_WHACKER", "SP_MORE_SPORE", "SP_SUN_BURST"],
+    isActive: false,
+    updatedAt: 0,
+  },
+  {
+    id: "HERO_SUPER_BRAINZ",
+    name: "Super Brainz",
+    title: "The Melee Marvel",
+    description: "An eccentric heroic zombie packing punches and heroic heroics across all lanes.",
+    maxHp: 20,
+    portraitUrl: "🧠",
+    allowedTribes: ["Brainy", "Sneaky", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_CARRIED_AWAY",
+    coreAbilityCardIds: ["SP_TELEPATHY", "SP_SUPER_STENCH", "SP_CUT_DOWN_TO_SIZE"],
+    isActive: false,
     updatedAt: 0,
   },
 ];
@@ -156,24 +209,26 @@ export class HeroRepository {
   // ── Bootstrap ─────────────────────────────────────────────────
 
   private async bootstrap(): Promise<void> {
-    // 1. Seed defaults
+    // 1. Seed defaults (Aegis Guardian + legacy heroes with isActive: false)
     for (const def of DEFAULT_HERO_DEFINITIONS) {
       this.heroDefs.set(def.id, { ...def });
     }
 
     // 2. Load localStorage overrides for instant cached UI
-    try {
-      const raw = localStorage.getItem(LS_HERO_KEY);
-      if (raw) {
-        const stored = JSON.parse(raw) as Record<string, HeroDefinition>;
-        for (const [id, def] of Object.entries(stored)) {
-          if (!LEGACY_HERO_IDS.has(id)) {
-            this.heroDefs.set(id, { ...def });
+    if (typeof localStorage !== "undefined") {
+      try {
+        const raw = localStorage.getItem(LS_HERO_KEY);
+        if (raw) {
+          const stored = JSON.parse(raw) as Record<string, HeroDefinition>;
+          for (const [id, def] of Object.entries(stored)) {
+            const isLegacy = LEGACY_HERO_IDS.has(id);
+            const isActive = typeof def.isActive === "boolean" ? def.isActive : !isLegacy;
+            this.heroDefs.set(id, { ...def, isActive });
           }
         }
+      } catch (err) {
+        console.warn("[HeroRepository] Failed to read stored heroes cache:", err);
       }
-    } catch (err) {
-      console.warn("[HeroRepository] Failed to read stored heroes cache:", err);
     }
 
     // 3. Authoritative fetch from Supabase & Backend
@@ -192,13 +247,8 @@ export class HeroRepository {
     try {
       const supabaseHeroes = await fetchHeroesFromSupabase();
       if (supabaseHeroes && supabaseHeroes.length > 0) {
-        for (const legId of LEGACY_HERO_IDS) {
-          this.heroDefs.delete(legId);
-        }
         for (const row of supabaseHeroes) {
-          if (!LEGACY_HERO_IDS.has(row.id)) {
-            this.heroDefs.set(row.id, row);
-          }
+          this.heroDefs.set(row.id, row);
         }
         this.persist();
         console.log(`[HeroRepository] Authoritative sync: Loaded ${supabaseHeroes.length} heroes from Supabase`);
@@ -214,16 +264,11 @@ export class HeroRepository {
       if (response.ok) {
         const data = await response.json();
         if (data.heroes && Array.isArray(data.heroes)) {
-          for (const legId of LEGACY_HERO_IDS) {
-            this.heroDefs.delete(legId);
-          }
           for (const rawHero of data.heroes) {
-            if (!LEGACY_HERO_IDS.has(rawHero.id)) {
-              const hero = normalizeHeroRow(rawHero);
-              const existing = this.heroDefs.get(hero.id);
-              if (!existing || (hero.updatedAt && hero.updatedAt >= (existing.updatedAt || 0))) {
-                this.heroDefs.set(hero.id, hero);
-              }
+            const hero = normalizeHeroRow(rawHero);
+            const existing = this.heroDefs.get(hero.id);
+            if (!existing || (hero.updatedAt && hero.updatedAt >= (existing.updatedAt || 0))) {
+              this.heroDefs.set(hero.id, hero);
             }
           }
           this.persist();
@@ -244,14 +289,16 @@ export class HeroRepository {
   }
 
   public getActiveHeroDefinitions(): HeroDefinition[] {
-    const active = Array.from(this.heroDefs.values()).filter((def) => def.isActive !== false);
+    const active = Array.from(this.heroDefs.values()).filter((def) => {
+      const isLegacy = LEGACY_HERO_IDS.has(def.id);
+      if (typeof def.isActive === "boolean") return def.isActive;
+      return !isLegacy;
+    });
     if (active.length > 0) return active;
 
-    // Fallback: if all were marked inactive or none found, fallback to all hero definitions
-    const all = this.getAllHeroDefinitions();
-    if (all.length > 0) return all;
-
-    return [...DEFAULT_HERO_DEFINITIONS];
+    // Safety fallback: if all were marked inactive or none found, ensure Aegis Guardian is returned active
+    const aegis = this.heroDefs.get("hero_aegis_guardian") || DEFAULT_HERO_DEFINITIONS[0];
+    return [{ ...aegis, isActive: true }];
   }
 
   public getHeroDefinition(id: string): HeroDefinition | undefined {
@@ -265,9 +312,7 @@ export class HeroRepository {
 
   public getActiveHeroes(): Hero[] {
     const activeDefs = this.getActiveHeroDefinitions();
-    const heroes = activeDefs.map((def) => this.hydrateHero(def));
-    if (heroes.length > 0) return heroes;
-    return this.getAllHeroes();
+    return activeDefs.map((def) => this.hydrateHero(def));
   }
 
   public getHero(id: string): Hero | undefined {
@@ -300,6 +345,9 @@ export class HeroRepository {
       coreAbilities: [core1, core2, core3],
     };
 
+    const isLegacy = LEGACY_HERO_IDS.has(def.id);
+    const isActive = typeof def.isActive === "boolean" ? def.isActive : !isLegacy;
+
     const hero: Hero = {
       id: def.id,
       name: def.name,
@@ -310,7 +358,7 @@ export class HeroRepository {
       startingHp: def.maxHp || 20,
       allowedTribes: [...def.allowedTribes],
       tribeSynergies: [...def.allowedTribes],
-      isActive: def.isActive !== false,
+      isActive,
       superpowerKit,
       get superpowers(): readonly Card[] {
         return [this.superpowerKit.signatureAbility, ...this.superpowerKit.coreAbilities];
@@ -324,39 +372,60 @@ export class HeroRepository {
   // ── Write API ─────────────────────────────────────────────────
 
   public async saveHero(def: HeroDefinition): Promise<boolean> {
+    const previous = this.heroDefs.get(def.id) ? { ...this.heroDefs.get(def.id)! } : null;
     const updated: HeroDefinition = {
       ...def,
       updatedAt: Date.now(),
     };
+
+    // 1. If Supabase is configured, push to Supabase and handle failures
+    if (isSupabaseConfigured) {
+      let supabaseSuccess = false;
+      try {
+        supabaseSuccess = await upsertHeroToSupabase(updated);
+        if (supabaseSuccess) {
+          console.log(`[HeroRepository] Hero "${updated.name}" (${updated.id}) successfully saved to Supabase heroes table.`);
+        } else {
+          console.error(`[HeroRepository] Supabase upsert returned false for "${updated.name}" (${updated.id}). Check RLS policies or credentials.`);
+        }
+      } catch (err) {
+        console.error("[HeroRepository] Supabase push exception:", err);
+        supabaseSuccess = false;
+      }
+
+      if (!supabaseSuccess) {
+        console.warn(`[HeroRepository] Supabase save failed for "${updated.name}" (${updated.id}). Local changes aborted.`);
+        // Revert local state to previous definition (or remove if newly created)
+        if (previous) {
+          this.heroDefs.set(def.id, previous);
+        } else {
+          this.heroDefs.delete(def.id);
+        }
+        this.persist();
+        this.notify();
+        return false;
+      }
+    }
+
+    // 2. Commit update to in-memory state & localStorage
     this.heroDefs.set(def.id, updated);
     this.persist();
     this.notify();
 
-    // 1. Authoritative push to Supabase PostgreSQL (await it)
-    let supabaseSuccess = false;
-    try {
-      supabaseSuccess = await upsertHeroToSupabase(updated);
-      if (supabaseSuccess) {
-        console.log(`[HeroRepository] Hero "${updated.name}" (${updated.id}) successfully saved to Supabase heroes table.`);
-      } else {
-        console.error(`[HeroRepository] Supabase upsert returned false for "${updated.name}" (${updated.id}). Check RLS policies or credentials.`);
+    // 3. Push to backend REST API (browser environment)
+    if (typeof window !== "undefined") {
+      try {
+        await fetch("/api/admin/update-hero", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: def.id, hero: updated }),
+        });
+      } catch (err) {
+        console.warn("[HeroRepository] Failed to push hero to server:", err);
       }
-    } catch (err) {
-      console.error("[HeroRepository] Supabase push exception:", err);
     }
 
-    // 2. Push to backend REST API
-    try {
-      await fetch("/api/admin/update-hero", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: def.id, hero: updated }),
-      });
-    } catch (err) {
-      console.warn("[HeroRepository] Failed to push hero to server:", err);
-    }
-
-    return supabaseSuccess;
+    return true;
   }
 
   public async deleteHero(id: string): Promise<boolean> {
@@ -377,15 +446,17 @@ export class HeroRepository {
       console.warn("[HeroRepository] Supabase delete error:", err);
     }
 
-    // 2. Delete from backend REST API
-    try {
-      await fetch("/api/admin/delete-hero", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-    } catch (err) {
-      console.warn("[HeroRepository] Failed to delete hero on server:", err);
+    // 2. Delete from backend REST API (browser environment)
+    if (typeof window !== "undefined") {
+      try {
+        await fetch("/api/admin/delete-hero", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+      } catch (err) {
+        console.warn("[HeroRepository] Failed to delete hero on server:", err);
+      }
     }
 
     return true;
@@ -398,6 +469,7 @@ export class HeroRepository {
   // ── Persistence ───────────────────────────────────────────────
 
   private persist(): void {
+    if (typeof localStorage === "undefined") return;
     try {
       const obj: Record<string, HeroDefinition> = {};
       for (const [id, def] of this.heroDefs.entries()) {

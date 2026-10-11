@@ -605,11 +605,19 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
       actualHero = AVAILABLE_HEROES[0];
     }
 
-    // Safety fallback if chosen hero is inactive
-    if (actualHero.isActive === false) {
-      console.warn(`[SyncGate] Hero "${actualHero.name}" is marked inactive. Falling back to active default.`);
-      const activeDefs = masterRegistry.getActiveHeroes();
-      actualHero = activeDefs[0] ? masterRegistry.hydrateHero(activeDefs[0]) : AVAILABLE_HEROES[0];
+    // Validate hero eligibility: reject inactive heroes for new loadouts
+    if (actualHero && actualHero.isActive === false) {
+      console.warn(`[SyncGate] Socket ${socket.id} attempted to submit inactive hero "${actualHero.name}" (${actualHero.id}). Rejecting loadout.`);
+      socket.emit("action_rejected", {
+        reason: `Hero "${actualHero.name}" is currently inactive and cannot be selected for new matches.`,
+      });
+      socket.emit("ACTION_REJECTED" as any, {
+        reason: `Hero "${actualHero.name}" is currently inactive and cannot be selected for new matches.`,
+      });
+      return callback?.({
+        success: false,
+        error: `Hero "${actualHero.name}" is currently inactive.`,
+      });
     }
 
     // Resolve Deck

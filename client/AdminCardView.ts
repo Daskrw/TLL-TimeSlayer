@@ -14,7 +14,7 @@ import { CardType, Hero, HeroDefinition, Keyword } from "../src/types";
 import { cardRepo, CardMeta } from "./CardRepository";
 import { heroRepo } from "./HeroRepository";
 import { textures } from "./CardTextureManager";
-import { uploadAssetToSupabaseStorage } from "../src/supabaseClient";
+import { uploadAssetToSupabaseStorage, LEGACY_HERO_IDS } from "../src/supabaseClient";
 
 // ─────────────────────────────────────────────────────────────
 //  Tribe / Type options
@@ -783,7 +783,8 @@ export class AdminCardView {
       const c2 = cardRepo.getCard(h.coreAbilityCardIds[1]);
       const c3 = cardRepo.getCard(h.coreAbilityCardIds[2]);
 
-      const isActive = h.isActive !== false;
+      const isLegacy = LEGACY_HERO_IDS.includes(h.id);
+      const isActive = typeof h.isActive === "boolean" ? h.isActive : !isLegacy;
       const statusBadge = isActive
         ? `<span class="adm-hero-status-badge active" style="background:#065f46;color:#34d399;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:800;border:1px solid #059669;letter-spacing:0.5px;">ACTIVE</span>`
         : `<span class="adm-hero-status-badge inactive" style="background:#7f1d1d;color:#fca5a5;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:800;border:1px solid #dc2626;letter-spacing:0.5px;">INACTIVE</span>`;
@@ -819,12 +820,40 @@ export class AdminCardView {
         </div>
 
         <div class="adm-hero-tile-actions">
+          <button class="adm-btn-toggle-hero ${isActive ? "active" : "inactive"}" style="padding:6px 10px;font-size:12px;font-weight:700;border-radius:5px;cursor:pointer;background:${isActive ? "#374151" : "#059669"};color:#fff;border:1px solid ${isActive ? "#4b5563" : "#10b981"};" title="${isActive ? "Deactivate hero" : "Activate hero"}">
+            ${isActive ? "⏸ Deactivate" : "▶ Activate"}
+          </button>
           <button class="adm-btn-edit-hero">✏ Edit Hero</button>
           <button class="adm-btn-del-hero" title="${isDefault ? "Reset to default hero stats" : "Delete custom hero"}">
             ${isDefault ? "↺ Reset" : "🗑 Delete"}
           </button>
         </div>
       `;
+
+      const toggleBtn = tile.querySelector(".adm-btn-toggle-hero") as HTMLButtonElement;
+      toggleBtn?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const targetActive = !isActive;
+        toggleBtn.disabled = true;
+        toggleBtn.textContent = targetActive ? "Activating..." : "Deactivating...";
+        try {
+          const ok = await heroRepo.saveHero({
+            ...h,
+            isActive: targetActive,
+          });
+          if (ok) {
+            this.showToast(`Hero "${h.name}" is now ${targetActive ? "ACTIVE" : "INACTIVE"}.`);
+            this.render();
+          } else {
+            this.showToast(`Failed to update hero status for "${h.name}". Reverting...`);
+            this.render();
+          }
+        } catch (err: any) {
+          console.error("[AdminCardView] Hero toggle error:", err);
+          this.showToast(`Error changing status: ${err?.message || err}`);
+          this.render();
+        }
+      });
 
       tile.querySelector(".adm-btn-edit-hero")?.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -992,7 +1021,8 @@ export class AdminCardView {
     idInput.value = heroDef?.id ?? `HERO_${Date.now().toString(36).toUpperCase()}`;
     idInput.readOnly = !this.isNewHero;
     if (activeInput) {
-      activeInput.checked = heroDef ? heroDef.isActive !== false : true;
+      const isLegacy = heroDef ? LEGACY_HERO_IDS.includes(heroDef.id) : false;
+      activeInput.checked = typeof heroDef?.isActive === "boolean" ? heroDef.isActive : (heroDef ? !isLegacy : true);
     }
     nameInput.value = heroDef?.name ?? "";
     titleInput.value = heroDef?.title ?? "";
@@ -1124,7 +1154,9 @@ export class AdminCardView {
     const c2Sel = this.heroModal.querySelector("#adm-hero-sp-c2") as HTMLSelectElement;
     const c3Sel = this.heroModal.querySelector("#adm-hero-sp-c3") as HTMLSelectElement;
 
-    const id = (idInput.value || "").trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+    const id = (!this.isNewHero && this.editingHero)
+      ? this.editingHero.id
+      : (idInput.value || "").trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_");
     const name = (nameInput.value || "").trim();
     const title = (titleInput.value || "").trim();
     const maxHp = parseInt(hpInput.value, 10) || 20;
@@ -1140,6 +1172,10 @@ export class AdminCardView {
 
     if (!id) {
       alert("Please provide a unique Hero ID.");
+      return;
+    }
+    if (this.isNewHero && heroRepo.getHeroDefinition(id)) {
+      alert(`A hero with ID "${id}" already exists. Please choose a different ID.`);
       return;
     }
     if (!name) {
@@ -1182,16 +1218,17 @@ export class AdminCardView {
 
     try {
       const ok = await heroRepo.saveHero(heroDef);
-      this.closeHeroModal();
-      this.render();
       if (ok) {
+        this.closeHeroModal();
+        this.render();
         this.showToast(`✅ Hero "${name}" saved & published to Supabase!`);
       } else {
-        this.showToast(`⚠️ Hero saved locally, but failed to write to Supabase (check RLS/network).`);
+        this.showToast(`❌ Failed to save hero to Supabase. Local changes aborted.`);
+        alert(`Failed to save hero "${name}" to Supabase. Check network/credentials.`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[AdminCardView] saveHero error:", err);
-      this.showToast(`⚠️ Error saving hero: ${err}`);
+      this.showToast(`⚠️ Error saving hero: ${err?.message || err}`);
     } finally {
       if (saveBtn) {
         saveBtn.disabled = false;

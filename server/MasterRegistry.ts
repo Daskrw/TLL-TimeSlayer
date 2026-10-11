@@ -45,6 +45,58 @@ export const DEFAULT_HEROES: HeroDefinition[] = [
     isActive: true,
     updatedAt: 0,
   },
+  {
+    id: "HERO_SKY_VANGUARD",
+    name: "Sky Vanguard",
+    title: "The Aerial Ace",
+    description: "Master of the skies, swooping down with precision aerial strikes and swift tactical movement.",
+    maxHp: 20,
+    portraitUrl: "🦅",
+    allowedTribes: ["Aerial", "Vanguard", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_SKY_STRIKE",
+    coreAbilityCardIds: ["SP_AERIAL_SURGE", "SP_TAILWIND_DRAFT", "SP_GLACIAL_GALE"],
+    isActive: false,
+    updatedAt: 0,
+  },
+  {
+    id: "HERO_ABYSSAL_SORCERER",
+    name: "Abyssal Sorcerer",
+    title: "Tidecaller of the Deep",
+    description: "Channels the dark currents of the deep abyss to flood enemy lanes and crush opponents with oceanic power.",
+    maxHp: 20,
+    portraitUrl: "🌊",
+    allowedTribes: ["Aquatic", "Mystic", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_TIDAL_WAVE",
+    coreAbilityCardIds: ["SP_SOOTHING_CURRENT", "SP_CORAL_AEGIS", "SP_AQUATIC_CONJURATION"],
+    isActive: false,
+    updatedAt: 0,
+  },
+  {
+    id: "HERO_SOLAR_FLARE",
+    name: "Solar Flare",
+    title: "The Radiant Sunburst",
+    description: "Draws searing solar energy to burn down enemy units and illuminate victory.",
+    maxHp: 20,
+    portraitUrl: "🌻",
+    allowedTribes: ["Kabloom", "Solar", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_SUNBURN",
+    coreAbilityCardIds: ["SP_WEED_WHACKER", "SP_MORE_SPORE", "SP_SUN_BURST"],
+    isActive: false,
+    updatedAt: 0,
+  },
+  {
+    id: "HERO_SUPER_BRAINZ",
+    name: "Super Brainz",
+    title: "The Melee Marvel",
+    description: "An eccentric heroic zombie packing punches and heroic heroics across all lanes.",
+    maxHp: 20,
+    portraitUrl: "🧠",
+    allowedTribes: ["Brainy", "Sneaky", "เป็นกลาง"],
+    signatureAbilityCardId: "SP_CARRIED_AWAY",
+    coreAbilityCardIds: ["SP_TELEPATHY", "SP_SUPER_STENCH", "SP_CUT_DOWN_TO_SIZE"],
+    isActive: false,
+    updatedAt: 0,
+  },
 ];
 
 export const LEGACY_HERO_IDS = new Set([
@@ -137,14 +189,14 @@ export class MasterRegistry {
           }
         }
 
-        // Populate heroes (excluding legacy ones, ensuring isActive is true by default)
+        // Populate heroes (ensuring isActive compatibility rule)
         for (const hero of data.heroes || []) {
-          if (!LEGACY_HERO_IDS.has(hero.id)) {
-            this.heroesMap.set(hero.id, {
-              ...hero,
-              isActive: hero.isActive !== false,
-            });
-          }
+          const isLegacy = LEGACY_HERO_IDS.has(hero.id);
+          const isActive = typeof hero.isActive === "boolean" ? hero.isActive : !isLegacy;
+          this.heroesMap.set(hero.id, {
+            ...hero,
+            isActive,
+          });
         }
 
         // Seed any missing default heroes
@@ -152,7 +204,6 @@ export class MasterRegistry {
           if (!this.heroesMap.has(defaultHero.id)) {
             this.heroesMap.set(defaultHero.id, {
               ...defaultHero,
-              isActive: defaultHero.isActive !== false,
             });
           }
         }
@@ -242,8 +293,14 @@ export class MasterRegistry {
   }
 
   public getActiveHeroes(): HeroDefinition[] {
-    const active = Array.from(this.heroesMap.values()).filter((h) => h.isActive !== false);
-    return active.length > 0 ? active : Array.from(this.heroesMap.values());
+    const active = Array.from(this.heroesMap.values()).filter((h) => {
+      const isLegacy = LEGACY_HERO_IDS.has(h.id);
+      if (typeof h.isActive === "boolean") return h.isActive;
+      return !isLegacy;
+    });
+    if (active.length > 0) return active;
+    const aegis = this.heroesMap.get("hero_aegis_guardian") || DEFAULT_HEROES[0];
+    return [{ ...aegis, isActive: true }];
   }
 
   public hydrateHero(def: HeroDefinition): Hero {
@@ -264,6 +321,9 @@ export class MasterRegistry {
       coreAbilities,
     };
 
+    const isLegacy = LEGACY_HERO_IDS.has(def.id);
+    const isActive = typeof def.isActive === "boolean" ? def.isActive : !isLegacy;
+
     return {
       id: def.id,
       name: def.name,
@@ -277,7 +337,7 @@ export class MasterRegistry {
       get superpowers() {
         return [this.superpowerKit.signatureAbility, ...this.superpowerKit.coreAbilities];
       },
-      isActive: def.isActive !== false,
+      isActive,
     };
   }
 

@@ -36,9 +36,14 @@ CREATE TABLE IF NOT EXISTS public.heroes (
     "allowedTribes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "signatureAbilityCardId" TEXT NOT NULL,
     "coreAbilityCardIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    "isActive" BOOLEAN DEFAULT true,
     "updatedAt" BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure active column exists if table was previously created
+ALTER TABLE public.heroes ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE public.heroes ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 
 -- 3. Enable Row Level Security (RLS)
 ALTER TABLE public.cards ENABLE ROW LEVEL SECURITY;

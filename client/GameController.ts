@@ -289,7 +289,7 @@ export class GameController {
     await heroRepo.whenReady();
     const heroes = heroRepo.getActiveHeroes();
 
-    this.overlay.showHeroSelection(heroes.length > 0 ? heroes : heroRepo.getAllHeroes(), (playerHeroChoice, oppHeroChoice) => {
+    this.overlay.showHeroSelection(heroes, (playerHeroChoice, oppHeroChoice) => {
       this.showDeckBuilder(playerHeroChoice, oppHeroChoice);
     });
   }
@@ -302,7 +302,7 @@ export class GameController {
     await heroRepo.whenReady();
     const heroes = heroRepo.getActiveHeroes();
 
-    this.overlay.showHeroSelection(heroes.length > 0 ? heroes : heroRepo.getAllHeroes(), (playerHeroChoice) => {
+    this.overlay.showHeroSelection(heroes, (playerHeroChoice) => {
       this.deckBuilder.show(
         playerHeroChoice,
         async (chosenDeck, selectedHero) => {

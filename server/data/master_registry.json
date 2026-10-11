@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": 1791376792163,
+  "updatedAt": 1791717084769,
   "heroes": [
     {
       "id": "hero_aegis_guardian",
@@ -25,6 +25,91 @@
         "card_sp_suppress_anger",
         "card_sp_leave_to_dust"
       ],
+      "updatedAt": 0,
+      "isActive": true
+    },
+    {
+      "id": "HERO_SKY_VANGUARD",
+      "name": "Sky Vanguard",
+      "title": "The Aerial Ace",
+      "description": "Master of the skies, swooping down with precision aerial strikes and swift tactical movement.",
+      "maxHp": 20,
+      "portraitUrl": "🦅",
+      "allowedTribes": [
+        "Aerial",
+        "Vanguard",
+        "เป็นกลาง"
+      ],
+      "signatureAbilityCardId": "SP_SKY_STRIKE",
+      "coreAbilityCardIds": [
+        "SP_AERIAL_SURGE",
+        "SP_TAILWIND_DRAFT",
+        "SP_GLACIAL_GALE"
+      ],
+      "isActive": false,
+      "updatedAt": 0
+    },
+    {
+      "id": "HERO_ABYSSAL_SORCERER",
+      "name": "Abyssal Sorcerer",
+      "title": "Tidecaller of the Deep",
+      "description": "Channels the dark currents of the deep abyss to flood enemy lanes and crush opponents with oceanic power.",
+      "maxHp": 20,
+      "portraitUrl": "🌊",
+      "allowedTribes": [
+        "Aquatic",
+        "Mystic",
+        "เป็นกลาง"
+      ],
+      "signatureAbilityCardId": "SP_TIDAL_WAVE",
+      "coreAbilityCardIds": [
+        "SP_SOOTHING_CURRENT",
+        "SP_CORAL_AEGIS",
+        "SP_AQUATIC_CONJURATION"
+      ],
+      "isActive": false,
+      "updatedAt": 0
+    },
+    {
+      "id": "HERO_SOLAR_FLARE",
+      "name": "Solar Flare",
+      "title": "The Radiant Sunburst",
+      "description": "Draws searing solar energy to burn down enemy units and illuminate victory.",
+      "maxHp": 20,
+      "portraitUrl": "🌻",
+      "allowedTribes": [
+        "Kabloom",
+        "Solar",
+        "เป็นกลาง"
+      ],
+      "signatureAbilityCardId": "SP_SUNBURN",
+      "coreAbilityCardIds": [
+        "SP_WEED_WHACKER",
+        "SP_MORE_SPORE",
+        "SP_SUN_BURST"
+      ],
+      "isActive": false,
+      "updatedAt": 0
+    },
+    {
+      "id": "HERO_SUPER_BRAINZ",
+      "name": "Super Brainz",
+      "title": "The Melee Marvel",
+      "description": "An eccentric heroic zombie packing punches and heroic heroics across all lanes.",
+      "maxHp": 20,
+      "portraitUrl": "🧠",
+      "allowedTribes": [
+        "Brainy",
+        "Sneaky",
+        "เป็นกลาง"
+      ],
+      "signatureAbilityCardId": "SP_CARRIED_AWAY",
+      "coreAbilityCardIds": [
+        "SP_TELEPATHY",
+        "SP_SUPER_STENCH",
+        "SP_CUT_DOWN_TO_SIZE"
+      ],
+      "isActive": false,
       "updatedAt": 0
     }
   ],
