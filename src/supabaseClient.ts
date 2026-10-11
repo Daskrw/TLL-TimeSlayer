@@ -17,6 +17,17 @@ export interface CardMeta extends CardDefinition {
 // We support both Vite (import.meta.env) and Node (process.env) contexts.
 
 function resolveEnv(key: string): string {
+  // 0. Window global injection (e.g. injected by server or HTML in production SPA)
+  try {
+    if (typeof window !== "undefined" && (window as any).__SUPABASE_ENV__) {
+      const winVal = (window as any).__SUPABASE_ENV__[key];
+      if (typeof winVal === "string" && winVal.trim() !== "") return winVal.trim();
+      const cleanKey = key.replace(/^VITE_/, "");
+      const cleanVal = (window as any).__SUPABASE_ENV__[cleanKey];
+      if (typeof cleanVal === "string" && cleanVal.trim() !== "") return cleanVal.trim();
+    }
+  } catch {}
+
   // 1. Vite client bundle (import.meta.env.*)
   try {
     if (typeof import.meta !== "undefined" && (import.meta as any).env) {
@@ -207,8 +218,10 @@ export function normalizeHeroRow(row: any): HeroDefinition {
     };
   }
 
-  const portrait = row.portraitUrl ?? row.portrait_url ?? "🧙";
-  const safePortrait = (!portrait || portrait === "loading" || portrait === "Uploading...") ? "🧙" : portrait;
+  const portrait = String(row.portraitUrl ?? row.portrait_url ?? "🧙").trim();
+  const safePortrait = (!portrait || portrait.toLowerCase() === "loading" || portrait.toLowerCase() === "uploading..." || portrait.startsWith("blob:"))
+    ? "🧙"
+    : portrait;
   const rawCores = Array.isArray(row.coreAbilityCardIds ?? row.core_ability_card_ids)
     ? (row.coreAbilityCardIds ?? row.core_ability_card_ids)
     : [];
@@ -310,9 +323,17 @@ export async function upsertHeroToSupabaseVerified(hero: HeroDefinition): Promis
   }
 
   try {
-    const safePortrait = (!hero.portraitUrl || hero.portraitUrl === "loading" || hero.portraitUrl === "Uploading...")
+    const rawPortrait = String(hero.portraitUrl || "").trim();
+    if (rawPortrait.startsWith("blob:")) {
+      return {
+        success: false,
+        error: "Temporary browser-only blob: URLs cannot be persisted to database. Use a durable data URL or hosted image URL.",
+      };
+    }
+
+    const safePortrait = (!rawPortrait || rawPortrait.toLowerCase() === "loading" || rawPortrait.toLowerCase() === "uploading...")
       ? "🧙"
-      : hero.portraitUrl;
+      : rawPortrait;
 
     const isActive = hero.isActive !== false;
 
@@ -419,6 +440,77 @@ export async function upsertHeroToSupabaseVerified(hero: HeroDefinition): Promis
     };
   } catch (err: any) {
     console.error("[Supabase] Exception during upsertHeroToSupabaseVerified:", err);
+    return {
+      success: false,
+      error: err?.message || String(err),
+    };
+  }
+}
+
+/**
+ * Updates only the active status of an existing hero in Supabase with strict read-back verification.
+ */
+export async function toggleHeroActiveInSupabase(id: string, isActive: boolean): Promise<UpsertHeroResult> {
+  if (!isSupabaseConfigured) {
+    return {
+      success: false,
+      persistedLocallyOnly: true,
+      error: "Supabase credentials are not configured in runtime environment (offline fallback mode).",
+    };
+  }
+
+  try {
+    let { error } = await supabase
+      .from("heroes")
+      .update({ is_active: isActive, updatedAt: Date.now() })
+      .eq("id", id);
+
+    // Fallback if schema was created with camelCase "isActive"
+    if (error && (error.message?.includes("is_active") || error.message?.includes("column") || error.code === "PGRST204")) {
+      const retry = await supabase
+        .from("heroes")
+        .update({ isActive: isActive, updatedAt: Date.now() })
+        .eq("id", id);
+      error = retry.error;
+    }
+
+    if (error) {
+      console.error("[Supabase] Error updating hero active status:", error.message, error);
+      return {
+        success: false,
+        error: `Supabase write error (${error.code || "UNKNOWN"}): ${error.message}`,
+      };
+    }
+
+    // Strict read-back verification
+    const { data: readBackRow, error: readBackError } = await supabase
+      .from("heroes")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (readBackError || !readBackRow) {
+      return {
+        success: false,
+        error: `Read-back verification failed for hero "${id}" after active toggle.`,
+      };
+    }
+
+    const persistedActive = readBackRow.is_active ?? readBackRow.isActive;
+    if (typeof persistedActive === "boolean" && persistedActive !== isActive) {
+      return {
+        success: false,
+        error: `Active status mismatch for hero "${id}" (expected ${isActive}, got ${persistedActive}).`,
+      };
+    }
+
+    const verifiedHero = normalizeHeroRow(readBackRow);
+    return {
+      success: true,
+      verifiedHero,
+    };
+  } catch (err: any) {
+    console.error("[Supabase] Exception during toggleHeroActiveInSupabase:", err);
     return {
       success: false,
       error: err?.message || String(err),

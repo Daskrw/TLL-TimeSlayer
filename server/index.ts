@@ -208,6 +208,16 @@ app.get("/api/catalog", (_req, res) => {
   });
 });
 
+app.get("/api/config", (_req, res) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+  res.json({
+    supabaseUrl,
+    supabaseAnonKey,
+    isConfigured: Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes("placeholder")),
+  });
+});
+
 // All /api/admin/* routes are guarded by requireAdminAuth middleware.
 app.post("/api/admin/update-card", requireAdminAuth, async (req, res): Promise<void> => {
   try {
@@ -986,8 +996,21 @@ if (process.env.NODE_ENV === "production" || fs.existsSync(clientBuildPath)) {
     if (req.method === "GET") {
       const indexFile = path.join(clientBuildPath, "index.html");
       if (fs.existsSync(indexFile)) {
-        res.sendFile(indexFile);
-        return;
+        try {
+          let html = fs.readFileSync(indexFile, "utf-8");
+          const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+          const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+          if (sbUrl && sbKey) {
+            const injection = `<script>window.__SUPABASE_ENV__={VITE_SUPABASE_URL:${JSON.stringify(sbUrl)},VITE_SUPABASE_ANON_KEY:${JSON.stringify(sbKey)}};</script>`;
+            html = html.replace("<head>", `<head>${injection}`);
+          }
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.send(html);
+          return;
+        } catch {
+          res.sendFile(indexFile);
+          return;
+        }
       }
     }
     next();
@@ -996,10 +1019,15 @@ if (process.env.NODE_ENV === "production" || fs.existsSync(clientBuildPath)) {
 
 // ── Server Start ───────────────────────────────────────────────
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, "0.0.0.0", async () => {
   console.log(`====================================================`);
   console.log(`  TLL TimeSlayer — Authoritative Game Server`);
   console.log(`  Listening on: http://0.0.0.0:${PORT}`);
   console.log(`  Health Check: http://0.0.0.0:${PORT}/health`);
   console.log(`====================================================`);
+  try {
+    await masterRegistry.syncFromSupabase();
+  } catch (err) {
+    console.warn("[Server] Initial Supabase sync error:", err);
+  }
 });

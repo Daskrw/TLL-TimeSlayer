@@ -549,34 +549,101 @@ export class AdminCardView {
     });
   }
 
+  private async compressImageToAvatar(file: File, maxDim = 256, quality = 0.85): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const rawDataUrl = ev.target?.result as string;
+        if (!rawDataUrl) return reject(new Error("Failed to read image file"));
+
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            return resolve(rawDataUrl);
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Try WebP first for optimal compression (typically ~10-25 KB)
+          try {
+            const webpUrl = canvas.toDataURL("image/webp", quality);
+            if (webpUrl && webpUrl.startsWith("data:image/webp")) {
+              return resolve(webpUrl);
+            }
+          } catch {}
+
+          // Fallback to JPEG
+          const jpegUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(jpegUrl || rawDataUrl);
+        };
+        img.onerror = () => reject(new Error("Failed to decode image"));
+        img.src = rawDataUrl;
+      };
+      reader.onerror = () => reject(new Error("File read error"));
+      reader.readAsDataURL(file);
+    });
+  }
+
   private bindHeroUploadEvents(): void {
     const fileInput = this.overlay.querySelector("#adm-hero-file-input") as HTMLInputElement;
     const browseBtn = this.overlay.querySelector("#adm-btn-upload-hero") as HTMLButtonElement;
     const portraitInput = this.overlay.querySelector("#adm-hero-field-portrait") as HTMLInputElement;
 
     const handleHeroFile = async (file: File) => {
-      this.readLocalImage(file, (dataUrl) => {
-        this.pendingHeroImg = dataUrl;
-        portraitInput.value = "Uploading...";
-        this.setHeroAvatarPreview(dataUrl);
-      });
+      const saveBtn = this.heroModal?.querySelector("#adm-btn-save-hero") as HTMLButtonElement;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "⏳ Processing image...";
+      }
+      portraitInput.value = "Optimizing portrait...";
 
       try {
-        const hostedUrl = await this.uploadAssetToServer(file);
-        if (hostedUrl) {
+        // 1. Client-side avatar optimization to compact WebP/JPEG data URL (~15-25 KB)
+        const compactDataUrl = await this.compressImageToAvatar(file);
+        this.pendingHeroImg = compactDataUrl;
+        this.setHeroAvatarPreview(compactDataUrl);
+
+        // 2. Attempt remote hosting if storage bucket is configured
+        const hostedUrl = await this.uploadAssetToServer(file, compactDataUrl);
+        if (hostedUrl && hostedUrl !== compactDataUrl) {
           this.pendingHeroImg = hostedUrl;
           portraitInput.value = hostedUrl;
           this.setHeroAvatarPreview(hostedUrl);
-          this.showToast("☁ Hero portrait uploaded & hosted on server!");
+          this.showToast("☁ Hero portrait hosted on CDN & ready to save!");
         } else {
-          portraitInput.value = this.pendingHeroImg || "🧙";
-          this.setHeroAvatarPreview(this.pendingHeroImg || "🧙");
-          this.showToast("⚠️ Could not host image remotely, using local preview.");
+          // Use the compact, self-contained data URL which persists directly to Supabase PostgreSQL!
+          this.pendingHeroImg = compactDataUrl;
+          portraitInput.value = compactDataUrl;
+          this.setHeroAvatarPreview(compactDataUrl);
+          this.showToast("⚡ Portrait optimized (self-contained data URL ready to persist).");
         }
       } catch (err) {
-        console.warn("[AdminCardView] Hero portrait upload error:", err);
+        console.warn("[AdminCardView] Hero portrait optimization/upload error:", err);
         portraitInput.value = this.pendingHeroImg || "🧙";
         this.setHeroAvatarPreview(this.pendingHeroImg || "🧙");
+        this.showToast("⚠️ Could not process image file. Using fallback avatar.");
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "💾 Save & Publish Hero";
+        }
       }
     };
 
@@ -603,10 +670,12 @@ export class AdminCardView {
     });
   }
 
-  private async uploadAssetToServer(file: File): Promise<string> {
+  private async uploadAssetToServer(file: File, fallbackDataUrl?: string): Promise<string> {
     // 1. Upload to Supabase Public Storage Bucket for permanent global HTTPS CDN URL
     try {
-      const supabaseUrl = await uploadAssetToSupabaseStorage(file);
+      const supabaseUrl = await uploadAssetToSupabaseStorage(
+        fallbackDataUrl ? { filename: file.name, dataUrl: fallbackDataUrl } : file,
+      );
       if (supabaseUrl) {
         console.log(`[AdminCardView] Successfully uploaded asset to Supabase Storage: ${supabaseUrl}`);
         return supabaseUrl;
@@ -615,31 +684,30 @@ export class AdminCardView {
       console.warn("[AdminCardView] Supabase Storage upload error:", err);
     }
 
-    // 2. Fallback to Node.js backend upload endpoint
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const dataUrl = ev.target?.result as string;
-        if (!dataUrl) return reject(new Error("Failed to read file"));
+    // 2. If Supabase Storage is unavailable, use the compact data URL (persists directly in DB text field)
+    if (fallbackDataUrl && fallbackDataUrl.startsWith("data:image/")) {
+      return fallbackDataUrl;
+    }
+
+    // 3. Fallback to Node.js backend upload endpoint
+    return new Promise((resolve) => {
+      this.readLocalImage(file, async (dataUrl) => {
         try {
           const res = await fetch("/api/admin/upload-asset", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: file.name, dataUrl }),
+            body: JSON.stringify({ filename: file.name, dataUrl: fallbackDataUrl || dataUrl }),
           });
           const json = await res.json();
           if (json.success && json.url) {
             resolve(json.url);
           } else {
-            resolve(dataUrl);
+            resolve(fallbackDataUrl || dataUrl);
           }
-        } catch (err) {
-          console.warn("[AdminCardView] Asset upload failed, falling back to data URL:", err);
-          resolve(dataUrl);
+        } catch {
+          resolve(fallbackDataUrl || dataUrl);
         }
-      };
-      reader.onerror = () => reject(new Error("File read error"));
-      reader.readAsDataURL(file);
+      });
     });
   }
 
@@ -858,10 +926,7 @@ export class AdminCardView {
         toggleBtn.disabled = true;
         toggleBtn.textContent = targetActive ? "⏳ Activating..." : "⏳ Deactivating...";
         try {
-          const res = await heroRepo.saveHeroDetailed({
-            ...h,
-            isActive: targetActive,
-          });
+          const res = await heroRepo.toggleHeroActive(h.id, targetActive);
           if (res.success) {
             const modeText = res.mode === "supabase" ? "☁ Cloud verified" : "⚡ Local fallback";
             this.showToast(`Hero "${h.name}" is now ${targetActive ? "ACTIVE" : "INACTIVE"} (${modeText}).`);
@@ -1186,11 +1251,24 @@ export class AdminCardView {
     const description = (descInput.value || "").trim();
     let portraitUrl = (portraitInput.value || "").trim();
 
-    if (!portraitUrl || portraitUrl.toLowerCase() === "uploading..." || portraitUrl.toLowerCase() === "loading") {
+    if (
+      !portraitUrl ||
+      portraitUrl.toLowerCase() === "uploading..." ||
+      portraitUrl.toLowerCase() === "loading" ||
+      portraitUrl.toLowerCase().includes("optimizing")
+    ) {
       portraitUrl = this.pendingHeroImg || "🧙";
     }
-    if (!portraitUrl || portraitUrl.toLowerCase() === "uploading..." || portraitUrl.toLowerCase() === "loading") {
+    if (
+      !portraitUrl ||
+      portraitUrl.toLowerCase() === "uploading..." ||
+      portraitUrl.toLowerCase() === "loading" ||
+      portraitUrl.toLowerCase().includes("optimizing")
+    ) {
       portraitUrl = "🧙";
+    }
+    if (portraitUrl.startsWith("blob:")) {
+      portraitUrl = (this.pendingHeroImg && !this.pendingHeroImg.startsWith("blob:")) ? this.pendingHeroImg : "🧙";
     }
 
     if (!id) {

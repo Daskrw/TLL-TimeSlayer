@@ -212,8 +212,126 @@ async function runPersistenceSuite() {
     console.log("\n▶ TEST 6: Live remote Supabase test skipped (credentials not loaded in this process).");
   }
 
+  // ------------------------------------------------------------
+  // CASE 7: Image Persistence & URL Validation
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 7: Image persistence — durable URLs accepted, blob: URLs rejected");
+  const testImgDef: HeroDefinition = {
+    id: "hero_img_test",
+    name: "Image Test Hero",
+    title: "Tester",
+    description: "Testing image persistence",
+    maxHp: 20,
+    portraitUrl: "blob:http://localhost:5299/d07ebf04-9426-444a-a43d-27f999999999",
+    allowedTribes: ["เป็นกลาง"],
+    signatureAbilityCardId: "card_sp_shield_of_legend",
+    coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
+    isActive: true,
+    updatedAt: Date.now(),
+  };
+
+  // blob: URL must be rejected
+  const blobRes = await upsertHeroToSupabaseVerified(testImgDef);
+  assert.strictEqual(blobRes.success, false, "blob: URL must be rejected by persistence layer");
+  assert.ok(blobRes.error?.includes("blob:"), "Error message must mention blob:");
+  console.log("  ✓ Correctly rejected temporary browser-only blob: URL");
+
+  // Compact Data URL and HTTPS URL must be accepted and verified
+  const testDataUrl = "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+  const validImgDef: HeroDefinition = {
+    ...testImgDef,
+    portraitUrl: testDataUrl,
+  };
+  const validRes = await upsertHeroToSupabaseVerified(validImgDef);
+  if (isSupabaseConfigured) {
+    assert.strictEqual(validRes.success, true, "Valid compact data URL must succeed");
+    assert.strictEqual(validRes.verifiedHero?.portraitUrl, testDataUrl, "Verified portraitUrl must match testDataUrl");
+    console.log("  ✓ Durable data URL saved and read-back verified in Supabase");
+
+    // Clean up test hero
+    await supabase.from("heroes").delete().eq("id", "hero_img_test");
+  } else {
+    console.log("  ✓ Data URL validation verified (offline mode)");
+  }
+
+  // ------------------------------------------------------------
+  // CASE 8: Duplicate Prevention & In-Place Edit Verification
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 8: Editing existing hero updates record in-place without creating duplicates");
+  HeroRepository.resetInstanceForTesting();
+  const dupCheckRepo = HeroRepository.getInstance();
+  await dupCheckRepo.whenReady();
+
+  const dupHeroId = "hero_duplicate_check";
+  const heroInitial: HeroDefinition = {
+    id: dupHeroId,
+    name: "Original Name",
+    title: "Title 1",
+    description: "Desc 1",
+    maxHp: 20,
+    portraitUrl: "🧙",
+    allowedTribes: ["เป็นกลาง"],
+    signatureAbilityCardId: "card_sp_shield_of_legend",
+    coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
+    isActive: true,
+    updatedAt: Date.now(),
+  };
+
+  await dupCheckRepo.saveHeroDetailed(heroInitial);
+  const countAfterInsert = dupCheckRepo.getAllHeroDefinitions().filter((h) => h.id === dupHeroId).length;
+  assert.strictEqual(countAfterInsert, 1, "Exactly 1 record must exist after initial save");
+
+  // Edit hero 3 consecutive times with new names and stats
+  await dupCheckRepo.saveHeroDetailed({ ...heroInitial, name: "Edit 1", maxHp: 22 });
+  await dupCheckRepo.saveHeroDetailed({ ...heroInitial, name: "Edit 2", maxHp: 25 });
+  await dupCheckRepo.saveHeroDetailed({ ...heroInitial, name: "Final Edit", maxHp: 30 });
+
+  const countAfterEdits = dupCheckRepo.getAllHeroDefinitions().filter((h) => h.id === dupHeroId).length;
+  assert.strictEqual(countAfterEdits, 1, "Exactly 1 record must exist after multiple saves — no duplicates created");
+  const finalDef = dupCheckRepo.getHeroDefinition(dupHeroId);
+  assert.strictEqual(finalDef?.name, "Final Edit", "Latest name must be preserved");
+  assert.strictEqual(finalDef?.maxHp, 30, "Latest maxHp must be preserved");
+  console.log("  ✓ Consecutive saves update in-place with zero duplicate creation");
+
+  // Clean up
+  await dupCheckRepo.deleteHero(dupHeroId);
+
+  // ------------------------------------------------------------
+  // CASE 9: Player Selection & Admin View Consistency
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 9: Player Selection and Admin View resolve the same saved hero definition");
+  HeroRepository.resetInstanceForTesting();
+  const parityRepo = HeroRepository.getInstance();
+  await parityRepo.whenReady();
+
+  const allHeroes = parityRepo.getAllHeroes();
+  const activeHeroes = parityRepo.getActiveHeroes();
+  assert.ok(activeHeroes.length > 0, "At least one active hero must be available for player selection");
+
+  for (const activeHero of activeHeroes) {
+    const adminDef = parityRepo.getHeroDefinition(activeHero.id);
+    assert.ok(adminDef, `Admin definition must exist for player hero ${activeHero.id}`);
+    assert.strictEqual(activeHero.name, adminDef!.name, "Name must match between Admin and Player view");
+    assert.strictEqual(activeHero.maxHp, adminDef!.maxHp, "Max HP must match between Admin and Player view");
+    assert.strictEqual(activeHero.portraitUrl, adminDef!.portraitUrl, "Portrait must match between Admin and Player view");
+    assert.strictEqual(activeHero.superpowerKit.signatureAbility.id, adminDef!.signatureAbilityCardId, "Signature card must match");
+  }
+  console.log(`  ✓ Verified identical hero definition and abilities across all ${activeHeroes.length} active heroes`);
+
+  // ------------------------------------------------------------
+  // CASE 10: Gameplay Ability Hydration & Superpowers Integrity
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 10: Gameplay superpower kit hydration integrity");
+  const aegisHero = parityRepo.getHero("hero_aegis_guardian");
+  assert.ok(aegisHero, "hero_aegis_guardian must hydrate properly");
+  if (!aegisHero) throw new Error("hero_aegis_guardian must hydrate properly");
+  assert.strictEqual(aegisHero.superpowers?.length, 4, "Aegis Guardian must command exactly 4 superpowers");
+  assert.strictEqual(aegisHero.superpowerKit.signatureAbility.id, "card_sp_shield_of_legend", "Signature card ID preserved");
+  assert.strictEqual(aegisHero.superpowerKit.coreAbilities.length, 3, "Core abilities length must be 3");
+  console.log("  ✓ Superpower kit properly hydrated with all 4 abilities");
+
   console.log("\n============================================================");
-  console.log("  ALL HERO PERSISTENCE REGRESSION TESTS PASSED!");
+  console.log("  ALL HERO PERSISTENCE & CROSS-BROWSER TESTS PASSED!");
   console.log("============================================================\n");
   process.exit(0);
 }

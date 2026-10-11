@@ -15,6 +15,7 @@ import * as StaticCards from "../src/cards";
 import {
   fetchHeroesFromSupabase,
   upsertHeroToSupabaseVerified,
+  toggleHeroActiveInSupabase,
   deleteHeroFromSupabase,
   normalizeHeroRow,
   supabase,
@@ -267,12 +268,23 @@ export class HeroRepository {
       try {
         const supabaseHeroes = await fetchHeroesFromSupabase();
         if (supabaseHeroes && supabaseHeroes.length > 0) {
+          const remoteIds = new Set<string>();
           for (const row of supabaseHeroes) {
+            remoteIds.add(row.id);
             // Normalize active status consistently across schema representations
             const isLegacy = LEGACY_HERO_IDS.has(row.id);
             const isActive = typeof row.isActive === "boolean" ? row.isActive : !isLegacy;
             this.heroDefs.set(row.id, { ...row, isActive });
           }
+
+          // Prune any custom (non-default) heroes that are no longer present in Supabase
+          for (const id of Array.from(this.heroDefs.keys())) {
+            const isDefault = DEFAULT_HERO_DEFINITIONS.some((d) => d.id === id);
+            if (!isDefault && !remoteIds.has(id)) {
+              this.heroDefs.delete(id);
+            }
+          }
+
           this.persist();
           console.log(`[HeroRepository] Authoritative sync: Loaded ${supabaseHeroes.length} heroes from Supabase database.`);
           return;
@@ -399,6 +411,78 @@ export class HeroRepository {
 
   // ── Write API ─────────────────────────────────────────────────
 
+  public async toggleHeroActive(id: string, isActive: boolean): Promise<{
+    success: boolean;
+    mode: "supabase" | "fallback";
+    error?: string;
+  }> {
+    const existing = this.heroDefs.get(id);
+    if (!existing) {
+      return {
+        success: false,
+        mode: this.getStorageMode(),
+        error: `Hero "${id}" not found.`,
+      };
+    }
+
+    const previousActive = existing.isActive;
+    const updated: HeroDefinition = {
+      ...existing,
+      isActive,
+      updatedAt: Date.now(),
+    };
+
+    if (isSupabaseConfigured) {
+      let sbRes: UpsertHeroResult;
+      try {
+        sbRes = await toggleHeroActiveInSupabase(id, isActive);
+      } catch (err: any) {
+        sbRes = {
+          success: false,
+          error: err?.message || String(err),
+        };
+      }
+
+      if (!sbRes.success) {
+        console.warn(`[HeroRepository] Supabase active toggle failed for "${id}":`, sbRes.error);
+        return {
+          success: false,
+          mode: "supabase",
+          error: sbRes.error || "Failed to persist active status to Supabase.",
+        };
+      }
+
+      if (sbRes.verifiedHero) {
+        this.heroDefs.set(id, sbRes.verifiedHero);
+      } else {
+        this.heroDefs.set(id, updated);
+      }
+    } else {
+      this.heroDefs.set(id, updated);
+    }
+
+    this.persist();
+    this.notify();
+
+    // Push to backend REST API
+    if (typeof window !== "undefined") {
+      try {
+        await fetch("/api/admin/update-hero", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, hero: this.heroDefs.get(id) }),
+        });
+      } catch (err) {
+        console.warn("[HeroRepository] Failed to push hero toggle to backend server:", err);
+      }
+    }
+
+    return {
+      success: true,
+      mode: isSupabaseConfigured ? "supabase" : "fallback",
+    };
+  }
+
   public async saveHero(def: HeroDefinition): Promise<boolean> {
     const result = await this.saveHeroDetailed(def);
     return result.success;
@@ -446,12 +530,17 @@ export class HeroRepository {
       }
 
       console.log(`[HeroRepository] Hero "${updated.name}" (${updated.id}) successfully verified in Supabase.`);
+      if (sbResult.verifiedHero) {
+        this.heroDefs.set(def.id, sbResult.verifiedHero);
+      } else {
+        this.heroDefs.set(def.id, updated);
+      }
     } else {
       console.warn(`[HeroRepository] Saving hero in local offline fallback mode (no Supabase connection).`);
+      this.heroDefs.set(def.id, updated);
     }
 
     // 2. Commit update to in-memory state & localStorage
-    this.heroDefs.set(def.id, updated);
     this.persist();
     this.notify();
 
@@ -461,7 +550,7 @@ export class HeroRepository {
         await fetch("/api/admin/update-hero", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: def.id, hero: updated }),
+          body: JSON.stringify({ id: def.id, hero: this.heroDefs.get(def.id) || updated }),
         });
       } catch (err) {
         console.warn("[HeroRepository] Failed to push hero to backend server:", err);

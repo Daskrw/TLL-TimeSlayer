@@ -14,6 +14,11 @@ import {
   SP_SUPPRESS_ANGER,
   SP_LEAVE_TO_DUST,
 } from "../src/cards";
+import {
+  fetchHeroesFromSupabase,
+  fetchCardsFromSupabase,
+  isSupabaseConfigured,
+} from "../src/supabaseClient";
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -255,6 +260,30 @@ export class MasterRegistry {
       fs.writeFileSync(REGISTRY_FILE, JSON.stringify(payload, null, 2), "utf-8");
     } catch (err) {
       console.error("[MasterRegistry] Error writing master_registry.json:", err);
+    }
+  }
+
+  public async syncFromSupabase(): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    try {
+      const heroes = await fetchHeroesFromSupabase();
+      if (heroes && heroes.length > 0) {
+        for (const h of heroes) {
+          this.heroesMap.set(h.id, h);
+        }
+        console.log(`[MasterRegistry] Synced ${heroes.length} heroes from Supabase database.`);
+      }
+      const cards = await fetchCardsFromSupabase();
+      if (cards && cards.length > 0) {
+        for (const c of cards) {
+          this.cardsMap.set(c.id, c);
+        }
+        console.log(`[MasterRegistry] Synced ${cards.length} cards from Supabase database.`);
+      }
+      this.updatedAt = Date.now();
+      this.saveToFile();
+    } catch (err) {
+      console.warn("[MasterRegistry] Supabase sync warning:", err);
     }
   }
 
