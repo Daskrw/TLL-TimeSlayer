@@ -14,11 +14,12 @@ import { cardRepo } from "./CardRepository";
 import * as StaticCards from "../src/cards";
 import {
   fetchHeroesFromSupabase,
-  upsertHeroToSupabase,
+  upsertHeroToSupabaseVerified,
   deleteHeroFromSupabase,
   normalizeHeroRow,
   supabase,
   isSupabaseConfigured,
+  UpsertHeroResult,
 } from "../src/supabaseClient";
 
 // ─────────────────────────────────────────────────────────────
@@ -150,12 +151,26 @@ export class HeroRepository {
   private readyPromise: Promise<void>;
   private resolveReady!: () => void;
 
-  private constructor() {
+  public constructor() {
     this.readyPromise = new Promise((resolve) => {
       this.resolveReady = resolve;
     });
     this.bootstrap();
-    this.initRealtime();
+    if (typeof window !== "undefined") {
+      this.initRealtime();
+    }
+  }
+
+  public isCloudAuthoritative(): boolean {
+    return isSupabaseConfigured;
+  }
+
+  public getStorageMode(): "supabase" | "fallback" {
+    return isSupabaseConfigured ? "supabase" : "fallback";
+  }
+
+  public static resetInstanceForTesting(): void {
+    HeroRepository._instance = null;
   }
 
   public static getInstance(): HeroRepository {
@@ -173,8 +188,11 @@ export class HeroRepository {
 
   private initRealtime(): void {
     try {
+      if (!isSupabaseConfigured) return;
+      // Use unique channel identifier to avoid duplicate subscription collisions
+      const channelName = `public:heroes_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       supabase
-        .channel("public:heroes")
+        .channel(channelName)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "heroes" },
@@ -214,7 +232,7 @@ export class HeroRepository {
       this.heroDefs.set(def.id, { ...def });
     }
 
-    // 2. Load localStorage overrides for instant cached UI
+    // 2. Load localStorage cache as fast initial rendering cache
     if (typeof localStorage !== "undefined") {
       try {
         const raw = localStorage.getItem(LS_HERO_KEY);
@@ -231,7 +249,8 @@ export class HeroRepository {
       }
     }
 
-    // 3. Authoritative fetch from Supabase & Backend
+    // 3. Authoritative fetch from Supabase & Backend:
+    // If Supabase is configured, remote database values ALWAYS overwrite any stale local cache.
     try {
       await this.fetchRemote();
     } catch (err) {
@@ -243,40 +262,49 @@ export class HeroRepository {
   }
 
   public async fetchRemote(): Promise<void> {
-    // 1. Try Supabase Cloud PostgreSQL
-    try {
-      const supabaseHeroes = await fetchHeroesFromSupabase();
-      if (supabaseHeroes && supabaseHeroes.length > 0) {
-        for (const row of supabaseHeroes) {
-          this.heroDefs.set(row.id, row);
-        }
-        this.persist();
-        console.log(`[HeroRepository] Authoritative sync: Loaded ${supabaseHeroes.length} heroes from Supabase`);
-        return;
-      }
-    } catch (err) {
-      console.error("[HeroRepository] Supabase fetchRemote failed:", err);
-    }
-
-    // 2. Also fetch Backend Node.js REST API (/api/catalog) to merge any server-cached heroes
-    try {
-      const response = await fetch("/api/catalog");
-      if (response.ok) {
-        const data = await response.json();
-        if (data.heroes && Array.isArray(data.heroes)) {
-          for (const rawHero of data.heroes) {
-            const hero = normalizeHeroRow(rawHero);
-            const existing = this.heroDefs.get(hero.id);
-            if (!existing || (hero.updatedAt && hero.updatedAt >= (existing.updatedAt || 0))) {
-              this.heroDefs.set(hero.id, hero);
-            }
+    // 1. Try Supabase Cloud PostgreSQL (Authoritative Source of Truth)
+    if (isSupabaseConfigured) {
+      try {
+        const supabaseHeroes = await fetchHeroesFromSupabase();
+        if (supabaseHeroes && supabaseHeroes.length > 0) {
+          for (const row of supabaseHeroes) {
+            // Normalize active status consistently across schema representations
+            const isLegacy = LEGACY_HERO_IDS.has(row.id);
+            const isActive = typeof row.isActive === "boolean" ? row.isActive : !isLegacy;
+            this.heroDefs.set(row.id, { ...row, isActive });
           }
           this.persist();
-          console.log(`[HeroRepository] Synced ${data.heroes.length} heroes from Backend Master Registry`);
+          console.log(`[HeroRepository] Authoritative sync: Loaded ${supabaseHeroes.length} heroes from Supabase database.`);
+          return;
         }
+      } catch (err) {
+        console.error("[HeroRepository] Supabase fetchRemote failed:", err);
       }
-    } catch (err) {
-      console.warn("[HeroRepository] Backend REST fetch skipped:", err);
+    } else {
+      console.log("[HeroRepository] Running in local offline fallback mode (Supabase not configured).");
+    }
+
+    // 2. If Supabase is not configured or returned no rows, query Backend Node.js REST API (/api/catalog)
+    if (typeof window !== "undefined") {
+      try {
+        const response = await fetch("/api/catalog");
+        if (response.ok) {
+          const data = await response.json();
+          if (data.heroes && Array.isArray(data.heroes)) {
+            for (const rawHero of data.heroes) {
+              const hero = normalizeHeroRow(rawHero);
+              const existing = this.heroDefs.get(hero.id);
+              if (!existing || (hero.updatedAt && hero.updatedAt >= (existing.updatedAt || 0))) {
+                this.heroDefs.set(hero.id, hero);
+              }
+            }
+            this.persist();
+            console.log(`[HeroRepository] Synced ${data.heroes.length} heroes from Backend Master Registry`);
+          }
+        }
+      } catch (err) {
+        console.warn("[HeroRepository] Backend REST fetch skipped:", err);
+      }
     }
   }
 
@@ -372,30 +400,37 @@ export class HeroRepository {
   // ── Write API ─────────────────────────────────────────────────
 
   public async saveHero(def: HeroDefinition): Promise<boolean> {
+    const result = await this.saveHeroDetailed(def);
+    return result.success;
+  }
+
+  public async saveHeroDetailed(def: HeroDefinition): Promise<{
+    success: boolean;
+    mode: "supabase" | "fallback";
+    error?: string;
+  }> {
     const previous = this.heroDefs.get(def.id) ? { ...this.heroDefs.get(def.id)! } : null;
     const updated: HeroDefinition = {
       ...def,
       updatedAt: Date.now(),
     };
 
-    // 1. If Supabase is configured, push to Supabase and handle failures
+    // 1. If Supabase is configured, push to Supabase and require strict read-back verification
     if (isSupabaseConfigured) {
-      let supabaseSuccess = false;
+      let sbResult: UpsertHeroResult;
       try {
-        supabaseSuccess = await upsertHeroToSupabase(updated);
-        if (supabaseSuccess) {
-          console.log(`[HeroRepository] Hero "${updated.name}" (${updated.id}) successfully saved to Supabase heroes table.`);
-        } else {
-          console.error(`[HeroRepository] Supabase upsert returned false for "${updated.name}" (${updated.id}). Check RLS policies or credentials.`);
-        }
-      } catch (err) {
-        console.error("[HeroRepository] Supabase push exception:", err);
-        supabaseSuccess = false;
+        sbResult = await upsertHeroToSupabaseVerified(updated);
+      } catch (err: any) {
+        console.error("[HeroRepository] Supabase save exception:", err);
+        sbResult = {
+          success: false,
+          error: err?.message || String(err),
+        };
       }
 
-      if (!supabaseSuccess) {
-        console.warn(`[HeroRepository] Supabase save failed for "${updated.name}" (${updated.id}). Local changes aborted.`);
-        // Revert local state to previous definition (or remove if newly created)
+      if (!sbResult.success) {
+        console.warn(`[HeroRepository] Supabase verified save failed for "${updated.name}" (${updated.id}). Reverting local state.`);
+        // Revert local state to previous definition (or delete if newly added)
         if (previous) {
           this.heroDefs.set(def.id, previous);
         } else {
@@ -403,8 +438,16 @@ export class HeroRepository {
         }
         this.persist();
         this.notify();
-        return false;
+        return {
+          success: false,
+          mode: "supabase",
+          error: sbResult.error || "Supabase write or read-back verification failed.",
+        };
       }
+
+      console.log(`[HeroRepository] Hero "${updated.name}" (${updated.id}) successfully verified in Supabase.`);
+    } else {
+      console.warn(`[HeroRepository] Saving hero in local offline fallback mode (no Supabase connection).`);
     }
 
     // 2. Commit update to in-memory state & localStorage
@@ -421,11 +464,14 @@ export class HeroRepository {
           body: JSON.stringify({ id: def.id, hero: updated }),
         });
       } catch (err) {
-        console.warn("[HeroRepository] Failed to push hero to server:", err);
+        console.warn("[HeroRepository] Failed to push hero to backend server:", err);
       }
     }
 
-    return true;
+    return {
+      success: true,
+      mode: isSupabaseConfigured ? "supabase" : "fallback",
+    };
   }
 
   public async deleteHero(id: string): Promise<boolean> {

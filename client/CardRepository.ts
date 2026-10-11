@@ -7,7 +7,7 @@
 //  – Reactive: subscribers notified when card data changes + Realtime sync
 // ============================================================
 
-import { CardDefinition, CardType, Keyword } from "../src/types";
+import { CardDefinition, CardType } from "../src/types";
 import * as StaticCards from "../src/cards";
 import {
   fetchCardsFromSupabase,

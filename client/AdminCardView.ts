@@ -179,6 +179,7 @@ export class AdminCardView {
           <div class="adm-header-left">
             <div class="adm-logo">🛠 CMS</div>
             <div class="adm-badge">ADMIN</div>
+            <div class="adm-storage-badge" id="adm-storage-badge" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;letter-spacing:0.3px;"></div>
             <!-- Navigation Tabs -->
             <div class="adm-tabs">
               <button class="adm-tab-btn active" id="adm-tab-cards">🃏 Cards</button>
@@ -653,7 +654,27 @@ export class AdminCardView {
 
   // ── Render Dispatcher ─────────────────────────────────────────
 
+  private updateStorageBadge(): void {
+    const badge = this.overlay.querySelector("#adm-storage-badge") as HTMLElement;
+    if (!badge) return;
+    const isCloud = heroRepo.isCloudAuthoritative();
+    if (isCloud) {
+      badge.style.background = "rgba(16, 185, 129, 0.15)";
+      badge.style.color = "#34d399";
+      badge.style.border = "1px solid rgba(16, 185, 129, 0.4)";
+      badge.title = "Connected to Supabase PostgreSQL cloud database. Changes are verified on write.";
+      badge.innerHTML = "☁ Supabase Cloud";
+    } else {
+      badge.style.background = "rgba(245, 158, 11, 0.15)";
+      badge.style.color = "#fbbf24";
+      badge.style.border = "1px solid rgba(245, 158, 11, 0.4)";
+      badge.title = "Supabase credentials not configured in environment. Running in offline/local catalogue fallback mode.";
+      badge.innerHTML = "⚡ Local Fallback";
+    }
+  }
+
   private render(): void {
+    this.updateStorageBadge();
     if (this.currentTab === "cards") {
       this.renderCardGrid();
     } else {
@@ -835,22 +856,24 @@ export class AdminCardView {
         e.stopPropagation();
         const targetActive = !isActive;
         toggleBtn.disabled = true;
-        toggleBtn.textContent = targetActive ? "Activating..." : "Deactivating...";
+        toggleBtn.textContent = targetActive ? "⏳ Activating..." : "⏳ Deactivating...";
         try {
-          const ok = await heroRepo.saveHero({
+          const res = await heroRepo.saveHeroDetailed({
             ...h,
             isActive: targetActive,
           });
-          if (ok) {
-            this.showToast(`Hero "${h.name}" is now ${targetActive ? "ACTIVE" : "INACTIVE"}.`);
+          if (res.success) {
+            const modeText = res.mode === "supabase" ? "☁ Cloud verified" : "⚡ Local fallback";
+            this.showToast(`Hero "${h.name}" is now ${targetActive ? "ACTIVE" : "INACTIVE"} (${modeText}).`);
             this.render();
           } else {
-            this.showToast(`Failed to update hero status for "${h.name}". Reverting...`);
+            const errDetail = res.error ? ` Reason: ${res.error}` : "";
+            this.showToast(`❌ Failed to persist status for "${h.name}".${errDetail} Reverting...`);
             this.render();
           }
         } catch (err: any) {
           console.error("[AdminCardView] Hero toggle error:", err);
-          this.showToast(`Error changing status: ${err?.message || err}`);
+          this.showToast(`⚠️ Error changing status: ${err?.message || err}. Reverting...`);
           this.render();
         }
       });
@@ -1213,18 +1236,20 @@ export class AdminCardView {
     const saveBtn = this.heroModal.querySelector("#adm-btn-save-hero") as HTMLButtonElement;
     if (saveBtn) {
       saveBtn.disabled = true;
-      saveBtn.textContent = "Publishing to Supabase...";
+      saveBtn.textContent = "⏳ Persisting & Verifying...";
     }
 
     try {
-      const ok = await heroRepo.saveHero(heroDef);
-      if (ok) {
+      const res = await heroRepo.saveHeroDetailed(heroDef);
+      if (res.success) {
         this.closeHeroModal();
         this.render();
-        this.showToast(`✅ Hero "${name}" saved & published to Supabase!`);
+        const modeLabel = res.mode === "supabase" ? "☁ Verified in Supabase!" : "⚡ Saved in local fallback cache";
+        this.showToast(`✅ Hero "${name}" saved (${modeLabel}).`);
       } else {
-        this.showToast(`❌ Failed to save hero to Supabase. Local changes aborted.`);
-        alert(`Failed to save hero "${name}" to Supabase. Check network/credentials.`);
+        const errorMsg = res.error || "Save rejected by persistence layer.";
+        this.showToast(`❌ Failed to save hero "${name}". ${errorMsg}`);
+        alert(`Failed to save hero "${name}":\n${errorMsg}`);
       }
     } catch (err: any) {
       console.error("[AdminCardView] saveHero error:", err);

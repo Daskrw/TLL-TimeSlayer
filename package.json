@@ -21,6 +21,7 @@
     "test:perspective": "tsx src/testPerspective.ts",
     "test:cardsync": "tsx src/testCardSync.ts",
     "test:heroes": "tsx src/testHeroManagement.ts",
+    "test:heropersistence": "tsx --env-file=.env src/testHeroPersistence.ts",
     "test:server": "tsx server/testServer.ts",
     "typecheck:server": "tsc --project tsconfig.server.json --noEmit"
   },

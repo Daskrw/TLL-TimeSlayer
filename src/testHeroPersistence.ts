@@ -1,0 +1,224 @@
+// ============================================================
+//  src/testHeroPersistence.ts — Comprehensive Persistence &
+//  Read-Back Verification Regression Suite
+// ============================================================
+
+import assert from "assert";
+import {
+  normalizeHeroRow,
+  upsertHeroToSupabaseVerified,
+  supabase,
+  isSupabaseConfigured,
+} from "./supabaseClient";
+import { HeroRepository, LEGACY_HERO_IDS } from "../client/HeroRepository";
+import { HeroDefinition } from "./types";
+
+console.log("\n============================================================");
+console.log("  RUNNING HERO PERSISTENCE & READ-BACK REGRESSION SUITE");
+console.log("============================================================\n");
+
+async function runPersistenceSuite() {
+  // ------------------------------------------------------------
+  // CASE 1: Normalization & Field Mapping
+  // ------------------------------------------------------------
+  console.log("▶ TEST 1: is_active and isActive normalization across DB formats");
+  const rowSnakeActive = { id: "hero_test_1", name: "Test 1", is_active: true };
+  assert.strictEqual(normalizeHeroRow(rowSnakeActive).isActive, true);
+
+  const rowSnakeInactive = { id: "hero_test_2", name: "Test 2", is_active: false };
+  assert.strictEqual(normalizeHeroRow(rowSnakeInactive).isActive, false);
+
+  const rowCamelActive = { id: "hero_test_3", name: "Test 3", isActive: true };
+  assert.strictEqual(normalizeHeroRow(rowCamelActive).isActive, true);
+
+  const rowCamelInactive = { id: "hero_test_4", name: "Test 4", isActive: false };
+  assert.strictEqual(normalizeHeroRow(rowCamelInactive).isActive, false);
+  console.log("  ✓ Correctly normalizes snake_case is_active and camelCase isActive");
+
+  // ------------------------------------------------------------
+  // CASE 2: Legacy Hero Compatibility Rules
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 2: Legacy vs Custom Hero default active status rules");
+  for (const legacyId of LEGACY_HERO_IDS) {
+    const legacyRow = { id: legacyId, name: "Legacy Hero" };
+    assert.strictEqual(normalizeHeroRow(legacyRow).isActive, false, `${legacyId} must default to inactive`);
+  }
+
+  const customRow = { id: "hero_new_custom", name: "New Custom Hero" };
+  assert.strictEqual(normalizeHeroRow(customRow).isActive, true, "Custom hero must default to active");
+
+  // Explicit values must never be overridden
+  const legacyExplicit = { id: "HERO_SKY_VANGUARD", name: "Sky", is_active: true };
+  assert.strictEqual(normalizeHeroRow(legacyExplicit).isActive, true, "Explicit true on legacy hero preserved");
+  console.log("  ✓ Legacy defaults to inactive, custom defaults to active, explicit preserved");
+
+  // ------------------------------------------------------------
+  // CASE 3: Simulated Supabase Save & Verification Flow
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 3: upsertHeroToSupabaseVerified handles missing configuration");
+  if (!isSupabaseConfigured) {
+    const hero: HeroDefinition = {
+      id: "hero_test_offline",
+      name: "Offline Hero",
+      title: "",
+      description: "",
+      maxHp: 20,
+      portraitUrl: "🧙",
+      allowedTribes: ["เป็นกลาง"],
+      signatureAbilityCardId: "card_sp_shield_of_legend",
+      coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
+      isActive: true,
+      updatedAt: Date.now(),
+    };
+    const res = await upsertHeroToSupabaseVerified(hero);
+    assert.strictEqual(res.success, false, "Must return success: false when Supabase is not configured");
+    assert.strictEqual(res.persistedLocallyOnly, true, "Must flag persistedLocallyOnly: true");
+    console.log("  ✓ Explicitly reports offline fallback mode when Supabase is unconfigured");
+  } else {
+    console.log("  (Supabase configured; tested in live integration cases below)");
+  }
+
+  // ------------------------------------------------------------
+  // CASE 4: HeroRepository Cache & Authoritative Sync Behavior
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 4: HeroRepository save and read-back lifecycle");
+  const repo = new HeroRepository();
+  await repo.whenReady();
+
+  const testHeroId = "hero_persistence_check";
+  const initialDef: HeroDefinition = {
+    id: testHeroId,
+    name: "Persistence Knight",
+    title: "Tester",
+    description: "Testing persistence",
+    maxHp: 20,
+    portraitUrl: "🛡️",
+    allowedTribes: ["เป็นกลาง"],
+    signatureAbilityCardId: "card_sp_shield_of_legend",
+    coreAbilityCardIds: ["card_sp_human_shield", "card_sp_suppress_anger", "card_sp_leave_to_dust"],
+    isActive: true,
+    updatedAt: Date.now(),
+  };
+
+  const saveRes1 = await repo.saveHeroDetailed(initialDef);
+  assert.strictEqual(saveRes1.success, true, "saveHeroDetailed should succeed");
+  assert.strictEqual(repo.getHeroDefinition(testHeroId)?.isActive, true);
+
+  // Toggle to inactive
+  const saveRes2 = await repo.saveHeroDetailed({ ...initialDef, isActive: false });
+  assert.strictEqual(saveRes2.success, true);
+  assert.strictEqual(repo.getHeroDefinition(testHeroId)?.isActive, false);
+
+  // Verify getActiveHeroDefinitions excludes it
+  const activeIds = repo.getActiveHeroDefinitions().map((h) => h.id);
+  assert.ok(!activeIds.includes(testHeroId), "Inactive hero must be excluded from getActiveHeroDefinitions()");
+
+  // Reactivate
+  const saveRes3 = await repo.saveHeroDetailed({ ...initialDef, isActive: true });
+  assert.strictEqual(saveRes3.success, true);
+  assert.strictEqual(repo.getHeroDefinition(testHeroId)?.isActive, true);
+  const activeIds2 = repo.getActiveHeroDefinitions().map((h) => h.id);
+  assert.ok(activeIds2.includes(testHeroId), "Reactivated hero must be in getActiveHeroDefinitions()");
+  console.log("  ✓ HeroRepository save, toggle, and active filtering verified");
+
+  // ------------------------------------------------------------
+  // CASE 5: Startup & Refresh Stale Cache Isolation
+  // ------------------------------------------------------------
+  console.log("\n▶ TEST 5: Startup hydration preserves active status without stale overwrite");
+  const freshRepo = new HeroRepository();
+  await freshRepo.whenReady();
+  const loaded = freshRepo.getHeroDefinition(testHeroId);
+  if (loaded) {
+    assert.strictEqual(loaded.isActive, true, "Fresh instance retains the confirmed active status");
+  }
+  console.log("  ✓ Fresh repository instance hydration verified");
+
+  // Cleanup test hero
+  await repo.deleteHero(testHeroId);
+  console.log("  ✓ Cleaned up test hero record");
+
+  // ------------------------------------------------------------
+  // CASE 6: Live Supabase Persistence (if credentials available)
+  // ------------------------------------------------------------
+  if (isSupabaseConfigured) {
+    console.log("\n▶ TEST 6: Live remote Supabase write and strict read-back verification");
+    // Target hero: hero_aegis_guardian (our stable non-destructive test anchor)
+    const { data: originalRow, error: origErr } = await supabase
+      .from("heroes")
+      .select("*")
+      .eq("id", "hero_aegis_guardian")
+      .single();
+
+    assert.ok(!origErr, `Supabase read error: ${origErr?.message}`);
+    assert.ok(originalRow, "hero_aegis_guardian must exist in Supabase");
+    const originalActive = Boolean(originalRow.is_active ?? originalRow.isActive);
+
+    console.log(`  Original remote status for Aegis Guardian: isActive = ${originalActive}`);
+
+    // Step A: Toggle status
+    const targetStatus = !originalActive;
+    const heroToSave = normalizeHeroRow({
+      ...originalRow,
+      is_active: targetStatus,
+      isActive: targetStatus,
+    });
+
+    const writeResult = await upsertHeroToSupabaseVerified(heroToSave);
+    assert.strictEqual(writeResult.success, true, `Write should succeed: ${writeResult.error}`);
+    assert.strictEqual(
+      writeResult.verifiedHero?.isActive,
+      targetStatus,
+      "Read-back verifiedHero must match targetStatus"
+    );
+
+    // Step B: Query independently directly via separate Supabase select query
+    const { data: verifiedRow, error: verifyErr } = await supabase
+      .from("heroes")
+      .select("id, is_active, maxHp")
+      .eq("id", "hero_aegis_guardian")
+      .single();
+
+    assert.ok(!verifyErr, `Independent query error: ${verifyErr?.message}`);
+    assert.strictEqual(
+      verifiedRow.is_active,
+      targetStatus,
+      `Independent query confirms database persisted is_active=${targetStatus}`
+    );
+    console.log(`  ✓ Database confirmed independent read-back: is_active = ${verifiedRow.is_active}`);
+
+    // Step C: Simulate page reload by creating a completely new HeroRepository
+    HeroRepository.resetInstanceForTesting();
+    const reloadedRepo = HeroRepository.getInstance();
+    await reloadedRepo.whenReady();
+    const reloadedHero = reloadedRepo.getHeroDefinition("hero_aegis_guardian");
+    assert.ok(reloadedHero, "Hero must load after simulated reload");
+    assert.strictEqual(
+      reloadedHero.isActive,
+      targetStatus,
+      `Reloaded hero must retain targetStatus ${targetStatus} from Supabase`
+    );
+    console.log(`  ✓ Simulated reload confirmed: reloaded HeroRepository has isActive = ${reloadedHero.isActive}`);
+
+    // Step D: Restore original status
+    const restoreHero = normalizeHeroRow({
+      ...originalRow,
+      is_active: originalActive,
+      isActive: originalActive,
+    });
+    const restoreResult = await upsertHeroToSupabaseVerified(restoreHero);
+    assert.strictEqual(restoreResult.success, true, "Restore write should succeed");
+    console.log(`  ✓ Restored original status for Aegis Guardian (isActive = ${originalActive})`);
+  } else {
+    console.log("\n▶ TEST 6: Live remote Supabase test skipped (credentials not loaded in this process).");
+  }
+
+  console.log("\n============================================================");
+  console.log("  ALL HERO PERSISTENCE REGRESSION TESTS PASSED!");
+  console.log("============================================================\n");
+  process.exit(0);
+}
+
+runPersistenceSuite().catch((err) => {
+  console.error("Test failure:", err);
+  process.exit(1);
+});

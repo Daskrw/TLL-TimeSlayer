@@ -278,8 +278,37 @@ export async function fetchHeroesFromSupabase(): Promise<HeroDefinition[] | null
   }
 }
 
+export interface UpsertHeroResult {
+  success: boolean;
+  persistedLocallyOnly?: boolean;
+  error?: string;
+  verifiedHero?: HeroDefinition;
+}
+
 export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
+  const res = await upsertHeroToSupabaseVerified(hero);
+  return res.success;
+}
+
+/**
+ * Persists a HeroDefinition to remote Supabase and performs strict read-back verification.
+ * 
+ * Rules:
+ * 1. Target column for active status in deployed Supabase schema is `is_active` (boolean).
+ * 2. CamelCase columns `maxHp`, `portraitUrl`, `signatureAbilityCardId`, `coreAbilityCardIds`, `updatedAt`
+ *    are quoted in schema, so they must be sent in camelCase.
+ * 3. Never strip active status or report false success if active column fails.
+ * 4. Read back the row immediately after upsert to verify stable ID and persisted active value.
+ */
+export async function upsertHeroToSupabaseVerified(hero: HeroDefinition): Promise<UpsertHeroResult> {
+  if (!isSupabaseConfigured) {
+    return {
+      success: false,
+      persistedLocallyOnly: true,
+      error: "Supabase credentials are not configured in runtime environment (offline fallback mode).",
+    };
+  }
+
   try {
     const safePortrait = (!hero.portraitUrl || hero.portraitUrl === "loading" || hero.portraitUrl === "Uploading...")
       ? "🧙"
@@ -287,6 +316,9 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
 
     const isActive = hero.isActive !== false;
 
+    // Primary payload matching deployed Supabase PostgreSQL schema:
+    // Notice: `is_active` is the snake_case column in remote database,
+    // while `maxHp`, `portraitUrl`, `signatureAbilityCardId`, `coreAbilityCardIds`, `updatedAt` are camelCase.
     const payload: Record<string, any> = {
       id: hero.id,
       name: hero.name,
@@ -297,47 +329,100 @@ export async function upsertHeroToSupabase(hero: HeroDefinition): Promise<boolea
       allowedTribes: hero.allowedTribes || [],
       signatureAbilityCardId: hero.signatureAbilityCardId || "",
       coreAbilityCardIds: hero.coreAbilityCardIds || [],
-      isActive,
+      is_active: isActive,
       updatedAt: hero.updatedAt || Date.now(),
     };
 
     let { error } = await supabase.from("heroes").upsert(payload, { onConflict: "id" });
 
-    // Fallback if schema was created with unquoted / snake_case column names
-    if (error && (error.message?.includes("column") || error.code === "PGRST204")) {
-      const snakePayload = {
-        id: hero.id,
-        name: hero.name,
-        title: hero.title || "",
-        description: hero.description || "",
-        max_hp: hero.maxHp || 20,
-        portrait_url: safePortrait,
-        allowed_tribes: hero.allowedTribes || [],
-        signature_ability_card_id: hero.signatureAbilityCardId || "",
-        core_ability_card_ids: hero.coreAbilityCardIds || [],
-        is_active: isActive,
-        updated_at: hero.updatedAt || Date.now(),
-      };
-      const retry = await supabase.from("heroes").upsert(snakePayload, { onConflict: "id" });
-      error = retry.error;
+    // Fallback attempt ONLY if database schema uses quoted "isActive" column instead of "is_active"
+    if (error && (error.message?.includes("is_active") || error.message?.includes("column") || error.code === "PGRST204")) {
+      const camelActivePayload = { ...payload };
+      delete camelActivePayload.is_active;
+      camelActivePayload.isActive = isActive;
 
-      // Fallback 2: if table schema has neither isActive nor is_active column
-      if (error && (error.message?.includes("column") || error.code === "PGRST204")) {
-        const noActivePayload = { ...payload };
-        delete noActivePayload.isActive;
-        const retry3 = await supabase.from("heroes").upsert(noActivePayload, { onConflict: "id" });
-        error = retry3.error;
+      const retryCamel = await supabase.from("heroes").upsert(camelActivePayload, { onConflict: "id" });
+      if (!retryCamel.error) {
+        error = null;
+      } else {
+        // Fallback attempt if table uses fully snake_case columns
+        const allSnakePayload = {
+          id: hero.id,
+          name: hero.name,
+          title: hero.title || "",
+          description: hero.description || "",
+          max_hp: hero.maxHp || 20,
+          portrait_url: safePortrait,
+          allowed_tribes: hero.allowedTribes || [],
+          signature_ability_card_id: hero.signatureAbilityCardId || "",
+          core_ability_card_ids: hero.coreAbilityCardIds || [],
+          is_active: isActive,
+          updated_at: hero.updatedAt || Date.now(),
+        };
+        const retrySnake = await supabase.from("heroes").upsert(allSnakePayload, { onConflict: "id" });
+        if (!retrySnake.error) {
+          error = null;
+        }
       }
     }
 
     if (error) {
-      console.error("[Supabase] Error upserting hero:", error.message, error);
-      return false;
+      console.error("[Supabase] Error upserting hero to database:", error.message, error);
+      return {
+        success: false,
+        error: `Supabase write error (${error.code || "UNKNOWN"}): ${error.message}`,
+      };
     }
-    return true;
-  } catch (err) {
-    console.error("[Supabase] Exception upserting hero:", err);
-    return false;
+
+    // ── STEP 4: Strict Read-Back Verification ────────────────────
+    // Read the hero record back from Supabase to verify persistence
+    const { data: readBackRow, error: readBackError } = await supabase
+      .from("heroes")
+      .select("*")
+      .eq("id", hero.id)
+      .single();
+
+    if (readBackError || !readBackRow) {
+      const msg = `Read-back verification failed: Record "${hero.id}" could not be retrieved from Supabase after write.`;
+      console.error("[Supabase]", msg, readBackError);
+      return {
+        success: false,
+        error: msg,
+      };
+    }
+
+    // Verify stable ID
+    if (String(readBackRow.id).trim() !== String(hero.id).trim()) {
+      const msg = `Read-back verification failed: ID mismatch (expected "${hero.id}", got "${readBackRow.id}").`;
+      console.error("[Supabase]", msg);
+      return {
+        success: false,
+        error: msg,
+      };
+    }
+
+    // Verify persisted active status
+    const persistedRawActive = readBackRow.is_active ?? readBackRow.isActive;
+    if (typeof persistedRawActive !== "boolean" || persistedRawActive !== isActive) {
+      const msg = `Read-back verification failed: isActive mismatch for "${hero.id}" (expected ${isActive}, but remote database stored ${persistedRawActive}).`;
+      console.error("[Supabase]", msg);
+      return {
+        success: false,
+        error: msg,
+      };
+    }
+
+    const verifiedHero = normalizeHeroRow(readBackRow);
+    return {
+      success: true,
+      verifiedHero,
+    };
+  } catch (err: any) {
+    console.error("[Supabase] Exception during upsertHeroToSupabaseVerified:", err);
+    return {
+      success: false,
+      error: err?.message || String(err),
+    };
   }
 }
 

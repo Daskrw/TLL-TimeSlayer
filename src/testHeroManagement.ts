@@ -4,11 +4,11 @@
 // ============================================================
 
 import assert from "assert";
-import { HeroRepository, DEFAULT_HERO_DEFINITIONS, LEGACY_HERO_IDS } from "../client/HeroRepository";
+import { HeroRepository, LEGACY_HERO_IDS } from "../client/HeroRepository";
 import { normalizeHeroRow } from "./supabaseClient";
 import { masterRegistry } from "../server/MasterRegistry";
 import { GameEngine } from "./GameEngine";
-import { DECK_VANGUARD_40, DECK_ABYSSAL_40, HERO_AEGIS_GUARDIAN } from "./cards";
+import { DECK_VANGUARD_40, DECK_ABYSSAL_40 } from "./cards";
 import { Hero, HeroDefinition } from "./types";
 
 console.log("\n============================================================");
@@ -216,7 +216,7 @@ async function runTests() {
   // Verify match engine continues executing without throwing or altering the active game session
   const passResult = matchEngine.passAction("PLAYER" as any);
   assert.strictEqual(passResult.success, true, "Ongoing match continues operating normally");
-  assert.strictEqual(matchEngine.state.player.hero.name, "Aegis Guardian");
+  assert.strictEqual(matchEngine.getState().player.hero.name, "Aegis Guardian");
   console.log("  ✓ Active match integrity preserved regardless of subsequent hero deactivation");
 
   // Restore Aegis Guardian to active
@@ -230,7 +230,7 @@ async function runTests() {
   // ------------------------------------------------------------
   console.log("\n▶ TEST 11: Save failure handling and rollback");
   // Test fallback/rollback in HeroRepository when save fails
-  const heroBeforeFailure = repo.getHeroDefinition("hero_aegis_guardian")!;
+  assert.ok(repo.getHeroDefinition("hero_aegis_guardian"), "Aegis Guardian exists before cleanup");
   
   // Clean up temporary test hero
   await repo.deleteHero(newHeroId);
