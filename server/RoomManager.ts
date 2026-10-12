@@ -14,9 +14,10 @@ export class RoomManager {
 
   // ── Room Creation & Lookup ───────────────────────────────────
 
-  public createRoom(socketId: string, playerName = "Player 1"): { room: GameRoom; role: "p1" } {
+  public createRoom(socketId: string, playerName = "Player 1"): { room: GameRoom; role: "p1"; reconnectToken: string } {
     // Generate a user-friendly 6-character room code
     const roomId = uuidv4().substring(0, 6).toUpperCase();
+    const reconnectToken = uuidv4();
 
     const room: GameRoom = {
       roomId,
@@ -26,6 +27,8 @@ export class RoomManager {
         p1: {
           socketId,
           playerName,
+          role: "p1",
+          reconnectToken,
           ready: false,
           connected: true,
         },
@@ -36,14 +39,14 @@ export class RoomManager {
     this.socketToRoom.set(socketId, { roomId, role: "p1" });
     this.sessions.set(roomId, new GameSession(room));
 
-    return { room, role: "p1" };
+    return { room, role: "p1", reconnectToken };
   }
 
   public joinRoom(
     roomId: string,
     socketId: string,
     playerName = "Player 2",
-  ): { success: boolean; room?: GameRoom; role?: "p1" | "p2"; error?: string } {
+  ): { success: boolean; room?: GameRoom; role?: "p1" | "p2"; reconnectToken?: string; error?: string } {
     const cleanId = roomId.trim().toUpperCase();
     const room = this.rooms.get(cleanId);
 
@@ -56,18 +59,25 @@ export class RoomManager {
     }
 
     if (room.players.p1?.socketId === socketId) {
-      return { success: true, room, role: "p1" };
+      return { success: true, room, role: "p1", reconnectToken: room.players.p1.reconnectToken };
+    }
+
+    if (room.players.p2?.socketId === socketId) {
+      return { success: true, room, role: "p2", reconnectToken: room.players.p2.reconnectToken };
     }
 
     if (!room.players.p2) {
+      const reconnectToken = uuidv4();
       room.players.p2 = {
         socketId,
         playerName,
+        role: "p2",
+        reconnectToken,
         ready: false,
         connected: true,
       };
       this.socketToRoom.set(socketId, { roomId: cleanId, role: "p2" });
-      return { success: true, room, role: "p2" };
+      return { success: true, room, role: "p2", reconnectToken };
     }
 
     return { success: false, error: `Room ${cleanId} is already full.` };
@@ -78,22 +88,22 @@ export class RoomManager {
   public matchmake(
     socketId: string,
     playerName = "Challenger",
-  ): { success: boolean; room: GameRoom; role: "p1" | "p2" } {
+  ): { success: boolean; room: GameRoom; role: "p1" | "p2"; reconnectToken: string } {
     // Check if an existing open lobby is looking for a 2nd player
     for (const [roomId, room] of this.rooms.entries()) {
       if (room.status === "LOBBY" && room.players.p1 && !room.players.p2) {
         if (room.players.p1.socketId !== socketId) {
           const joinRes = this.joinRoom(roomId, socketId, playerName);
-          if (joinRes.success && joinRes.room) {
-            return { success: true, room: joinRes.room, role: "p2" };
+          if (joinRes.success && joinRes.room && joinRes.reconnectToken) {
+            return { success: true, room: joinRes.room, role: "p2", reconnectToken: joinRes.reconnectToken };
           }
         }
       }
     }
 
     // Otherwise create a fresh room
-    const { room, role } = this.createRoom(socketId, playerName);
-    return { success: true, room, role };
+    const { room, role, reconnectToken } = this.createRoom(socketId, playerName);
+    return { success: true, room, role, reconnectToken };
   }
 
   // ── Accessors ────────────────────────────────────────────────
@@ -164,12 +174,34 @@ export class RoomManager {
     return { room, role };
   }
 
-  public handleReconnect(socketId: string, roomId: string, role: "p1" | "p2"): boolean {
-    const room = this.rooms.get(roomId.toUpperCase());
-    if (!room) return false;
+  public handleReconnect(
+    socketId: string,
+    roomId: string,
+    role: "p1" | "p2",
+    reconnectToken?: string,
+  ): { success: boolean; error?: string } {
+    const cleanId = roomId.toUpperCase();
+    const room = this.rooms.get(cleanId);
+    if (!room) return { success: false, error: `Room ${cleanId} not found.` };
+
+    if (room.status === "FINISHED") {
+      return { success: false, error: "Match has already concluded." };
+    }
 
     const player = role === "p1" ? room.players.p1 : room.players.p2;
-    if (!player) return false;
+    if (!player) return { success: false, error: `Player slot ${role} not found in room ${cleanId}.` };
+
+    // Validate reconnect token: mandatory when assigned to slot
+    if (player.reconnectToken) {
+      if (!reconnectToken || player.reconnectToken !== reconnectToken) {
+        return { success: false, error: "Invalid reconnect token." };
+      }
+    }
+
+    // Clear old socket mapping if socketId has changed
+    if (player.socketId && player.socketId !== socketId) {
+      this.socketToRoom.delete(player.socketId);
+    }
 
     player.socketId = socketId;
     player.connected = true;
@@ -180,8 +212,8 @@ export class RoomManager {
       delete room.disconnectTimers[role];
     }
 
-    this.socketToRoom.set(socketId, { roomId, role });
-    return true;
+    this.socketToRoom.set(socketId, { roomId: cleanId, role });
+    return { success: true };
   }
 
   public cleanupRoom(roomId: string): void {

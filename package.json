@@ -23,6 +23,7 @@
     "test:heroes": "tsx src/testHeroManagement.ts",
     "test:heropersistence": "tsx --env-file=.env src/testHeroPersistence.ts",
     "test:server": "tsx server/testServer.ts",
+    "test:multiplayer": "tsx server/testMultiplayerHardened.ts",
     "typecheck:server": "tsc --project tsconfig.server.json --noEmit"
   },
   "devDependencies": {

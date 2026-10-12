@@ -20,6 +20,11 @@ export class GameSession {
   private engine: GameEngine;
   private mulliganTimer: NodeJS.Timeout | null = null;
   private onMulliganCompleteCb?: () => void;
+  private stateVersion: number = 1;
+  private processedActions: Map<
+    string,
+    { timestamp: number; result: any; role?: "p1" | "p2"; actionType?: string; payloadSummary?: string }
+  > = new Map();
 
   constructor(room: GameRoom) {
     this.room = room;
@@ -37,6 +42,59 @@ export class GameSession {
 
   public getState(): GameState {
     return this.engine.getState();
+  }
+
+  public getStateVersion(): number {
+    return this.stateVersion;
+  }
+
+  // ── Action Idempotency ───────────────────────────────────────
+
+  public isActionDuplicate(
+    actionId?: string,
+    role?: "p1" | "p2",
+    actionType?: string,
+    payloadSummary?: string,
+  ): { isDuplicate: boolean; isConflict?: boolean; error?: string; cachedResult?: any } {
+    if (!actionId) return { isDuplicate: false };
+    const cached = this.processedActions.get(actionId);
+    if (cached) {
+      if (
+        (!role || !cached.role || cached.role === role) &&
+        (!actionType || !cached.actionType || cached.actionType === actionType) &&
+        (!payloadSummary || !cached.payloadSummary || cached.payloadSummary === payloadSummary)
+      ) {
+        return { isDuplicate: true, cachedResult: cached.result };
+      }
+      return {
+        isDuplicate: false,
+        isConflict: true,
+        error: "Action ID reused with differing payload or role.",
+      };
+    }
+    return { isDuplicate: false };
+  }
+
+  public recordAction(
+    actionId?: string,
+    result?: any,
+    role?: "p1" | "p2",
+    actionType?: string,
+    payloadSummary?: string,
+  ): void {
+    if (!actionId) return;
+    // Bound the idempotency cache to last 200 actions
+    if (this.processedActions.size > 200) {
+      const oldestKey = this.processedActions.keys().next().value;
+      if (oldestKey) this.processedActions.delete(oldestKey);
+    }
+    this.processedActions.set(actionId, {
+      timestamp: Date.now(),
+      result,
+      role,
+      actionType,
+      payloadSummary,
+    });
   }
 
   // ── Loadout & Initialization ─────────────────────────────────
@@ -79,6 +137,7 @@ export class GameSession {
       { seed: Date.now(), firstPlayerId: PlayerId.Player },
     );
 
+    this.stateVersion++;
     this.room.status = "MULLIGAN";
   }
 
@@ -113,6 +172,7 @@ export class GameSession {
         this.engine.confirmMulligan(PlayerId.Opponent, []);
       }
     }
+    this.stateVersion++;
     this.room.status = "IN_GAME";
     this.onMulliganCompleteCb?.();
   }
@@ -129,6 +189,7 @@ export class GameSession {
       return { success: false, error: res.error };
     }
 
+    this.stateVersion++;
     const state = this.engine.getState();
     // Once both players confirm, phase leaves MULLIGAN
     if (state.currentPhase !== TurnPhase.MULLIGAN) {
@@ -147,36 +208,105 @@ export class GameSession {
     laneIndex?: number,
     targetId?: string,
     slotType?: "frontline" | "support",
+    actionId?: string,
   ) {
     if (this.room.status !== "IN_GAME") {
       return { success: false as const, state: this.getState(), error: "Match is not currently in progress." };
     }
 
+    const payloadSummary = JSON.stringify({
+      cardId,
+      laneIndex: laneIndex !== undefined && laneIndex !== null ? Number(laneIndex) : null,
+      targetId: targetId ?? null,
+      slotType: slotType ?? null,
+    });
+
+    if (actionId) {
+      const check = this.isActionDuplicate(actionId, role, "play_card", payloadSummary);
+      if (check.isConflict) {
+        return { success: false as const, state: this.getState(), error: check.error || "Action ID reused with differing payload." };
+      }
+      if (check.isDuplicate) {
+        return { success: true as const, state: this.getState(), duplicate: true, events: check.cachedResult?.events || [] };
+      }
+    }
+
     const playerId = role === "p1" ? PlayerId.Player : PlayerId.Opponent;
     const res = this.engine.playCard(playerId, cardId, laneIndex, targetId, slotType);
 
-    if (res.success && res.state.isGameOver) {
-      this.room.status = "FINISHED";
-      this.room.winner = res.state.winner ?? undefined;
+    if (res.success) {
+      this.stateVersion++;
+      if (actionId) {
+        this.recordAction(actionId, { events: res.events }, role, "play_card", payloadSummary);
+      }
+      if (res.state.isGameOver) {
+        this.room.status = "FINISHED";
+        this.room.winner = res.state.winner ?? undefined;
+      }
     }
 
     return res;
   }
 
-  public passTurn(role: "p1" | "p2") {
+  public passTurn(role: "p1" | "p2", actionId?: string) {
     if (this.room.status !== "IN_GAME") {
       return { success: false as const, state: this.getState(), error: "Match is not currently in progress." };
+    }
+
+    const payloadSummary = "";
+
+    if (actionId) {
+      const check = this.isActionDuplicate(actionId, role, "pass_turn", payloadSummary);
+      if (check.isConflict) {
+        return { success: false as const, state: this.getState(), error: check.error || "Action ID reused with differing payload." };
+      }
+      if (check.isDuplicate) {
+        return { success: true as const, state: this.getState(), duplicate: true, events: check.cachedResult?.events || [] };
+      }
     }
 
     const playerId = role === "p1" ? PlayerId.Player : PlayerId.Opponent;
     const res = this.engine.passAction(playerId);
 
-    if (res.success && res.state.isGameOver) {
-      this.room.status = "FINISHED";
-      this.room.winner = res.state.winner ?? undefined;
+    if (res.success) {
+      this.stateVersion++;
+      if (actionId) {
+        this.recordAction(actionId, { events: res.events }, role, "pass_turn", payloadSummary);
+      }
+      if (res.state.isGameOver) {
+        this.room.status = "FINISHED";
+        this.room.winner = res.state.winner ?? undefined;
+      }
     }
 
     return res;
+  }
+
+  /**
+   * Surrender/concede handling for active or mulligan matches.
+   */
+  public surrender(role: "p1" | "p2"): { winner: PlayerId | "DRAW"; reason: string } {
+    const rawState = this.engine.getState();
+    if (rawState.isGameOver && rawState.winner) {
+      return {
+        winner: rawState.winner,
+        reason: "Match has already concluded.",
+      };
+    }
+
+    const winner = role === "p1" ? PlayerId.Opponent : PlayerId.Player;
+    this.clearMulliganTimer();
+    this.room.status = "FINISHED";
+    this.room.winner = winner;
+
+    rawState.isGameOver = true;
+    rawState.winner = winner;
+    this.stateVersion++;
+
+    return {
+      winner,
+      reason: `${role === "p1" ? "Player 1" : "Player 2"} surrendered.`,
+    };
   }
 
   /**
@@ -216,6 +346,7 @@ export class GameSession {
       if (adv2.success) allEvents.push(...adv2.events);
     }
 
+    this.stateVersion++;
     const finalState = this.engine.getState();
     if (finalState.isGameOver) {
       this.room.status = "FINISHED";
@@ -265,6 +396,7 @@ export class GameSession {
     const p2Raw: PlayerState = state.opponent;
 
     return {
+      stateVersion: this.stateVersion,
       turnNumber: state.turnNumber,
       firstPlayerId: state.firstPlayerId,
       activePlayerId: state.activePlayerId,

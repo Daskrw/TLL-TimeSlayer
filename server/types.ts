@@ -23,6 +23,7 @@ export interface PlayerSlot {
   socketId: string;
   playerName: string;
   role?: "p1" | "p2" | "P1" | "P2";
+  reconnectToken?: string;
   hero?: Hero;
   deck?: Card[];
   deckCardIds?: string[];
@@ -68,6 +69,7 @@ export interface SanitizedOpponentState {
 }
 
 export interface SanitizedGameState {
+  stateVersion: number;
   turnNumber: number;
   firstPlayerId: PlayerId;
   activePlayerId: PlayerId;
@@ -116,17 +118,17 @@ export interface ActionLoggedPayload {
 export interface ClientToServerEvents {
   create_room: (
     data: { playerName?: string },
-    callback: (res: { success: boolean; roomId: string; role: "p1" }) => void,
+    callback: (res: { success: boolean; roomId: string; role: "p1"; reconnectToken: string }) => void,
   ) => void;
 
   join_room: (
     data: { roomId: string; playerName?: string },
-    callback: (res: { success: boolean; error?: string; role?: "p1" | "p2"; roomId?: string }) => void,
+    callback: (res: { success: boolean; error?: string; role?: "p1" | "p2"; roomId?: string; reconnectToken?: string }) => void,
   ) => void;
 
   matchmake: (
     data: { playerName?: string },
-    callback: (res: { success: boolean; roomId: string; role: "p1" | "p2" }) => void,
+    callback: (res: { success: boolean; roomId: string; role: "p1" | "p2"; reconnectToken?: string }) => void,
   ) => void;
 
   submit_loadout: (
@@ -157,13 +159,24 @@ export interface ClientToServerEvents {
       laneIndex?: number;
       targetId?: string;
       slotType?: "frontline" | "support";
+      actionId?: string;
     },
-    callback: (res: { success: boolean; error?: string; events?: GameEvent[] }) => void,
+    callback: (res: { success: boolean; error?: string; events?: GameEvent[]; duplicate?: boolean }) => void,
   ) => void;
 
   pass_turn: (
+    data: { roomId: string; actionId?: string },
+    callback: (res: { success: boolean; error?: string; events?: GameEvent[]; duplicate?: boolean }) => void,
+  ) => void;
+
+  reconnect_player: (
+    data: { roomId: string; role: "p1" | "p2"; reconnectToken?: string },
+    callback: (res: { success: boolean; error?: string; state?: SanitizedGameState }) => void,
+  ) => void;
+
+  surrender: (
     data: { roomId: string },
-    callback: (res: { success: boolean; error?: string; events?: GameEvent[] }) => void,
+    callback?: (res: { success: boolean; error?: string }) => void,
   ) => void;
 
   leave_room: (data: { roomId: string }) => void;

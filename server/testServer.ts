@@ -124,7 +124,7 @@ async function runIntegrationTest() {
   // 6. Test Playing a Card Authoritatively
   console.log("▶ Step 6: Testing Authoritative Action (Play Card & Pass)...");
   const p1Hand = p1State.self.hand;
-  const unitToPlay = p1Hand.find((c: any) => c.type === "Unit" && c.cost <= 1);
+  const unitToPlay = p1Hand.find((c: any) => c.type.toUpperCase() === "UNIT" && (c.currentCost ?? c.cost) <= 1);
 
   if (unitToPlay) {
     await new Promise<void>((resolve, reject) => {

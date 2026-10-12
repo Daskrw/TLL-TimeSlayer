@@ -89,6 +89,7 @@ export class GameController {
   private chosenPlayerDeck: CardDefinition[] | null = null;
   private screenController: ScreenController | null = null;
   private latestSanitizedState: SanitizedGameState | null = null;
+  private latestStateVersion: number = 0;
   /** Bot difficulty selected by the player before match start */
   private botDifficulty: BotDifficulty = "Medium";
 
@@ -1462,10 +1463,17 @@ export class GameController {
   }
 
   private async handleNetworkStateSync(sanitized: SanitizedGameState, events: GameEvent[]): Promise<void> {
+    if (sanitized.stateVersion !== undefined) {
+      if (sanitized.stateVersion < this.latestStateVersion) {
+        console.warn(`[Client] Ignoring stale state update (received v${sanitized.stateVersion}, current v${this.latestStateVersion})`);
+        return;
+      }
+      this.latestStateVersion = sanitized.stateVersion;
+    }
     this.latestSanitizedState = sanitized;
     this.combatAnim.setRole(sanitized.myRole);
     this.drag.setRole(sanitized.myRole);
-    console.log(`[Client] Received State update. Current Phase: ${sanitized.currentPhase}, My Turn: ${sanitized.isMyTurn}`);
+    console.log(`[Client] Received State update (v${sanitized.stateVersion}). Current Phase: ${sanitized.currentPhase}, My Turn: ${sanitized.isMyTurn}`);
     this.state.currentPhase = sanitized.currentPhase;
     this.state.turnNumber = sanitized.turnNumber;
     // 1. Life counters
@@ -1606,6 +1614,8 @@ export class GameController {
 
     this.overlay.showGameOver(resolvedWinner, stats, () => this.restartGame(), subtitle);
     this.setInteractive(false);
+    this.latestStateVersion = 0;
+    networkService.clearSession();
   }
 
   public update(dt: number): void {

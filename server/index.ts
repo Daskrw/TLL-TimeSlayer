@@ -464,13 +464,14 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
 
   // 1. Create Room
   socket.on("create_room", ({ playerName }, callback) => {
-    const { room, role } = roomManager.createRoom(socket.id, playerName || "Player 1");
+    const { room, role, reconnectToken } = roomManager.createRoom(socket.id, playerName || "Player 1");
     socket.join(room.roomId);
 
     callback({
       success: true,
       roomId: room.roomId,
       role,
+      reconnectToken,
     });
 
     console.log(`[Server] Player P1 connected & created room ${room.roomId} (${playerName || "Player 1"}) [${socket.id}]`);
@@ -478,6 +479,9 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
 
   // 2. Join Room
   socket.on("join_room", ({ roomId, playerName }, callback) => {
+    if (!roomId || typeof roomId !== "string") {
+      return callback({ success: false, error: "Valid room code is required." });
+    }
     const res = roomManager.joinRoom(roomId, socket.id, playerName || "Player 2");
     if (!res.success || !res.room) {
       return callback({ success: false, error: res.error });
@@ -489,6 +493,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
       success: true,
       roomId: res.room.roomId,
       role: res.role,
+      reconnectToken: res.reconnectToken,
     });
 
     console.log(`[Server] Player P2 connected & joined room ${res.room.roomId} (${playerName || "Player 2"}) [${socket.id}]`);
@@ -518,13 +523,14 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
 
   // 3. Matchmake (Quick Match)
   socket.on("matchmake", ({ playerName }, callback) => {
-    const { room, role } = roomManager.matchmake(socket.id, playerName || "Challenger");
+    const { room, role, reconnectToken } = roomManager.matchmake(socket.id, playerName || "Challenger");
     socket.join(room.roomId);
 
     callback({
       success: true,
       roomId: room.roomId,
       role,
+      reconnectToken,
     });
 
     io.to(room.roomId).emit("room_state", {
@@ -702,7 +708,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
         const p1Sanitized = session.getSanitizedState("p1");
         const p2Sanitized = session.getSanitizedState("p2");
 
-        const initPayload = {
+        const publicInitPayload = {
           roomId: targetRoomId,
           startingPhase: session.getState().currentPhase,
           p1Data: {
@@ -717,18 +723,18 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
             hp: p2Sanitized.self.hp,
             maxHp: p2Sanitized.self.maxHp,
           },
-          p1State: p1Sanitized,
-          p2State: p2Sanitized,
-          initialState: p1Sanitized,
         };
 
-        // Broadcast MATCH_INITIALIZED to BOTH sockets in the room and directly
-        io.to(targetRoomId).emit("MATCH_INITIALIZED" as any, initPayload);
-        if (p1SocketId) io.to(p1SocketId).emit("MATCH_INITIALIZED" as any, initPayload);
-        if (p2SocketId) io.to(p2SocketId).emit("MATCH_INITIALIZED" as any, initPayload);
+        // Broadcast public metadata to room (No private hands or decks leaked)
+        io.to(targetRoomId).emit("MATCH_INITIALIZED" as any, publicInitPayload);
 
-        // Deliver opening Mulligan hands to each player
+        // Deliver personalized sanitized states to each player separately
         if (p1SocketId) {
+          io.to(p1SocketId).emit("MATCH_INITIALIZED" as any, {
+            ...publicInitPayload,
+            initialState: p1Sanitized,
+            p1State: p1Sanitized,
+          });
           io.to(p1SocketId).emit("mulligan_started", {
             roomId: targetRoomId,
             initialHand: p1Sanitized.mulliganHand || [],
@@ -737,6 +743,11 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
         }
 
         if (p2SocketId) {
+          io.to(p2SocketId).emit("MATCH_INITIALIZED" as any, {
+            ...publicInitPayload,
+            initialState: p2Sanitized,
+            p2State: p2Sanitized,
+          });
           io.to(p2SocketId).emit("mulligan_started", {
             roomId: targetRoomId,
             initialHand: p2Sanitized.mulliganHand || [],
@@ -791,7 +802,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
   });
 
   // 6. Play Card (supports play_card and ACTION_PLAY_CARD)
-  const onPlayCard = ({ roomId, cardId, laneIndex, targetId, slotType }: any, callback?: any) => {
+  const onPlayCard = ({ roomId, cardId, laneIndex, targetId, slotType, actionId }: any, callback?: any) => {
     const meta = roomManager.getPlayerRole(socket.id);
     const rId = roomId || meta?.roomId;
     if (!meta || meta.roomId !== rId) {
@@ -800,11 +811,59 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
       return callback?.({ success: false, error: "Not a participant in this room." });
     }
 
+    // Payload validation
+    if (!cardId || typeof cardId !== "string") {
+      socket.emit("action_rejected", { reason: "Invalid card ID." });
+      return callback?.({ success: false, error: "Invalid card ID." });
+    }
+    if (laneIndex !== undefined && laneIndex !== null) {
+      const idx = Number(laneIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx > 3) {
+        socket.emit("action_rejected", { reason: "Invalid lane index (must be 0-3)." });
+        return callback?.({ success: false, error: "Invalid lane index (must be 0-3)." });
+      }
+    }
+    if (slotType !== undefined && slotType !== null && slotType !== "frontline" && slotType !== "support") {
+      socket.emit("action_rejected", { reason: "Invalid slot type." });
+      return callback?.({ success: false, error: "Invalid slot type." });
+    }
+
     const session = roomManager.getSession(rId);
     if (!session) {
       socket.emit("action_rejected", { reason: "Session not found." });
       (socket as any).emit("ACTION_REJECTED", { reason: "Session not found." });
       return callback?.({ success: false, error: "Session not found." });
+    }
+
+    const payloadSummary = JSON.stringify({
+      cardId,
+      laneIndex: laneIndex !== undefined && laneIndex !== null ? Number(laneIndex) : null,
+      targetId: targetId ?? null,
+      slotType: slotType ?? null,
+    });
+
+    // Duplicate check for action idempotency
+    if (actionId) {
+      const dupCheck = session.isActionDuplicate(actionId, meta.role, "play_card", payloadSummary);
+      if (dupCheck.isConflict) {
+        socket.emit("action_rejected", { reason: dupCheck.error || "Action ID reused with differing payload." });
+        (socket as any).emit("ACTION_REJECTED", { reason: dupCheck.error || "Action ID reused with differing payload." });
+        return callback?.({ success: false, error: dupCheck.error });
+      }
+      if (dupCheck.isDuplicate) {
+        console.log(`[Server] Duplicate play_card ignored (actionId: ${actionId})`);
+        return callback?.({ success: true, duplicate: true, events: dupCheck.cachedResult?.events || [] });
+      }
+    }
+
+    // Turn verification
+    const currentPhase = session.getState().currentPhase;
+    const isP1Turn = currentPhase === TurnPhase.P1_UNIT_PHASE || currentPhase === TurnPhase.P1_SPELL_PHASE;
+    const isMyTurn = meta.role === "p1" ? isP1Turn : !isP1Turn;
+    if (!isMyTurn) {
+      socket.emit("action_rejected", { reason: "It is not your turn." });
+      (socket as any).emit("ACTION_REJECTED", { reason: "It is not your turn." });
+      return callback?.({ success: false, error: "It is not your turn." });
     }
 
     console.log(`[Server] Action received from ${meta.role.toUpperCase()}: PLAY_CARD (cardId: ${cardId}, laneIndex: ${laneIndex}) in ${rId}`);
@@ -816,7 +875,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
     const rawP = meta.role === "p1" ? session.getState().player : session.getState().opponent;
     const playedCard = rawP.hand.find((c: any) => c.id === cardId) || rawP.deck.find((c: any) => c.id === cardId) || masterRegistry.getCard(cardId) || getStaticCardById(cardId);
 
-    const res = session.playCard(meta.role, cardId, laneIndex, targetId, slotType);
+    const res = session.playCard(meta.role, cardId, laneIndex, targetId, slotType, actionId);
     if (!res.success) {
       socket.emit("action_rejected", { reason: res.error || "Illegal card play." });
       (socket as any).emit("ACTION_REJECTED", { reason: res.error || "Illegal card play." });
@@ -824,7 +883,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
     }
 
     const historyEntry = {
-      id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      id: actionId || `act_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       playerId: meta.role === "p1" ? "P1" : "P2",
       role: meta.role,
       playerName: senderName,
@@ -851,7 +910,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
   (socket as any).on("ACTION_PLAY_CARD", onPlayCard);
 
   // 7. Pass Turn / Phase (supports pass_turn and ACTION_PASS_PHASE)
-  const onPassPhase = ({ roomId }: any = {}, callback?: any) => {
+  const onPassPhase = ({ roomId, actionId }: any = {}, callback?: any) => {
     const meta = roomManager.getPlayerRole(socket.id);
     const rId = roomId || meta?.roomId;
     if (!meta || meta.roomId !== rId) {
@@ -867,8 +926,32 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
       return callback?.({ success: false, error: "Session not found." });
     }
 
+    // Duplicate check for action idempotency
+    if (actionId) {
+      const dupCheck = session.isActionDuplicate(actionId, meta.role, "pass_turn", "");
+      if (dupCheck.isConflict) {
+        socket.emit("action_rejected", { reason: dupCheck.error || "Action ID reused with differing payload." });
+        (socket as any).emit("ACTION_REJECTED", { reason: dupCheck.error || "Action ID reused with differing payload." });
+        return callback?.({ success: false, error: dupCheck.error });
+      }
+      if (dupCheck.isDuplicate) {
+        console.log(`[Server] Duplicate pass_turn ignored (actionId: ${actionId})`);
+        return callback?.({ success: true, duplicate: true, events: dupCheck.cachedResult?.events || [] });
+      }
+    }
+
+    // Turn verification
+    const currentPhase = session.getState().currentPhase;
+    const isP1Turn = currentPhase === TurnPhase.P1_UNIT_PHASE || currentPhase === TurnPhase.P1_SPELL_PHASE;
+    const isMyTurn = meta.role === "p1" ? isP1Turn : !isP1Turn;
+    if (!isMyTurn) {
+      socket.emit("action_rejected", { reason: "Cannot pass when it is not your turn." });
+      (socket as any).emit("ACTION_REJECTED", { reason: "Cannot pass when it is not your turn." });
+      return callback?.({ success: false, error: "Cannot pass when it is not your turn." });
+    }
+
     console.log(`[Server] Action received from ${meta.role.toUpperCase()}: PASS_TURN in ${rId}`);
-    const res = session.passTurn(meta.role);
+    const res = session.passTurn(meta.role, actionId);
     if (!res.success) {
       socket.emit("action_rejected", { reason: res.error || "Cannot pass right now." });
       (socket as any).emit("ACTION_REJECTED", { reason: res.error || "Cannot pass right now." });
@@ -904,31 +987,93 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
 
     io.to(roomId).emit("chat_broadcast", {
       sender: senderName,
-      text: text.slice(0, 200), // Cap length
+      text: (text || "").slice(0, 200), // Cap length
       timestamp: Date.now(),
     });
   });
 
-  // 9. Leave Room
+  // 9. Leave Room / Surrender
+  const handlePlayerLeaveOrSurrender = (roomId: string, isSurrender = false) => {
+    const cleanId = (roomId || "").trim().toUpperCase();
+    const meta = roomManager.getPlayerRole(socket.id);
+    const room = roomManager.getRoom(cleanId);
+    if (!room) return;
+
+    const role = meta?.roomId === cleanId ? meta.role : (room.players.p1?.socketId === socket.id ? "p1" : room.players.p2?.socketId === socket.id ? "p2" : undefined);
+    if (!role) return;
+
+    if (room.status === "IN_GAME" || room.status === "MULLIGAN") {
+      // In-game leave or surrender awards victory to opponent
+      clearTurnTimer(cleanId);
+      const session = roomManager.getSession(cleanId);
+      const result = session ? session.surrender(role) : {
+        winner: role === "p1" ? PlayerId.Opponent : PlayerId.Player,
+        reason: `${role === "p1" ? "Player 1" : "Player 2"} surrendered.`,
+      };
+
+      io.to(cleanId).emit("game_over", {
+        winner: result.winner,
+        reason: result.reason,
+      });
+
+      console.log(`[Match] ${role.toUpperCase()} surrendered/left room ${cleanId}. Match concluded.`);
+      socket.leave(cleanId);
+
+      // Clean up after 15 seconds to allow UI to show game over
+      setTimeout(() => {
+        roomManager.cleanupRoom(cleanId);
+      }, 15000);
+    } else if (room.status === "LOBBY") {
+      socket.leave(cleanId);
+      if (role === "p1") {
+        // Host left lobby -> room closes, notify guest
+        io.to(cleanId).emit("action_rejected", { reason: "Room host left the lobby." });
+        roomManager.cleanupRoom(cleanId);
+      } else {
+        // Guest left lobby -> room remains open for host, notify p1
+        delete room.players.p2;
+        roomManager.handleDisconnect(socket.id, () => {});
+        io.to(cleanId).emit("room_state", {
+          roomId: cleanId,
+          status: room.status,
+          p1: room.players.p1
+            ? {
+                name: room.players.p1.playerName,
+                ready: room.players.p1.ready,
+                lockedIn: room.players.p1.lockedIn,
+                heroName: room.players.p1.hero?.name,
+              }
+            : undefined,
+          p2: undefined,
+        });
+      }
+    } else {
+      socket.leave(cleanId);
+    }
+  };
+
   socket.on("leave_room", ({ roomId }) => {
-    socket.leave(roomId);
-    roomManager.cleanupRoom(roomId);
+    handlePlayerLeaveOrSurrender(roomId, false);
   });
 
-  // 10. Reconnect — re-deliver full sanitized game state
-  // P0 Fix #4: Client sends 'reconnect_player' with roomId+role to re-sync.
-  (socket as any).on("reconnect_player", ({ roomId, role }: { roomId: string; role: "p1" | "p2" }, callback?: any) => {
-    const cleanId = (roomId || "").trim().toUpperCase();
-    const success = roomManager.handleReconnect(socket.id, cleanId, role);
+  socket.on("surrender", ({ roomId }, callback) => {
+    handlePlayerLeaveOrSurrender(roomId, true);
+    callback?.({ success: true });
+  });
 
-    if (!success) {
-      console.warn(`[Reconnect] Failed for socket ${socket.id} → room ${cleanId} role ${role}`);
-      callback?.({ success: false, error: "Room or player slot not found." });
+  // 10. Reconnect — securely restore sanitized game state
+  socket.on("reconnect_player", ({ roomId, role, reconnectToken }: { roomId: string; role: "p1" | "p2"; reconnectToken?: string }, callback?: any) => {
+    const cleanId = (roomId || "").trim().toUpperCase();
+    const res = roomManager.handleReconnect(socket.id, cleanId, role, reconnectToken);
+
+    if (!res.success) {
+      console.warn(`[Reconnect] Failed for socket ${socket.id} -> room ${cleanId} role ${role}: ${res.error}`);
+      callback?.({ success: false, error: res.error || "Room or player slot not found." });
       return;
     }
 
     socket.join(cleanId);
-    console.log(`[Reconnect] ${role.toUpperCase()} rejoined room ${cleanId} (${socket.id})`);
+    console.log(`[Reconnect] ${role.toUpperCase()} securely rejoined room ${cleanId} (${socket.id})`);
 
     // Notify opponent the player is back
     socket.to(cleanId).emit("opponent_reconnected");
@@ -947,10 +1092,11 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
         events: [],
       }));
       (socket as any).emit("PHASE_CHANGED", { newPhase: session.getState().currentPhase });
-      console.log(`[Reconnect] Resent state to ${role.toUpperCase()} in room ${cleanId}`);
+      console.log(`[Reconnect] Resent state (v${sanitized.stateVersion}) to ${role.toUpperCase()} in room ${cleanId}`);
+      callback?.({ success: true, state: sanitized });
+    } else {
+      callback?.({ success: true });
     }
-
-    callback?.({ success: true });
   });
 
   // 11. Disconnection Handling & Forfeit Grace Period
@@ -959,6 +1105,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
 
     roomManager.handleDisconnect(socket.id, (room, forfeitRole) => {
       // 30-second forfeit timer fired!
+      if (room.status === "FINISHED") return;
       console.log(`[Forfeit] ${forfeitRole} timed out in ${room.roomId}. Awarding victory.`);
       clearTurnTimer(room.roomId);
       const winningPlayerId = forfeitRole === "p1" ? PlayerId.Opponent : PlayerId.Player;

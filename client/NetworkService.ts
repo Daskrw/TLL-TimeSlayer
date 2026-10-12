@@ -70,6 +70,7 @@ export class NetworkService {
   public roomId: string | null = null;
   public myRole: "p1" | "p2" | null = null;
   public myPlayerId: "P1" | "P2" | null = null;
+  public reconnectToken: string | null = null;
   public isConnected = false;
   public isOnlineMode = false;
   public playerName = "Player";
@@ -119,6 +120,48 @@ export class NetworkService {
     };
   }
 
+  // ── Session Persistence ───────────────────────────────────────
+
+  public saveSession(roomId: string, role: "p1" | "p2", token?: string): void {
+    this.roomId = roomId;
+    this.myRole = role;
+    if (token) this.reconnectToken = token;
+    this.isOnlineMode = true;
+
+    if (typeof sessionStorage !== "undefined") {
+      try {
+        sessionStorage.setItem(
+          "tll_timeslayer_session",
+          JSON.stringify({ roomId, role, reconnectToken: this.reconnectToken }),
+        );
+      } catch {}
+    }
+  }
+
+  public clearSession(): void {
+    this.roomId = null;
+    this.myRole = null;
+    this.myPlayerId = null;
+    this.reconnectToken = null;
+    this.isOnlineMode = false;
+
+    if (typeof sessionStorage !== "undefined") {
+      try {
+        sessionStorage.removeItem("tll_timeslayer_session");
+      } catch {}
+    }
+  }
+
+  public getSavedSession(): { roomId: string; role: "p1" | "p2"; reconnectToken?: string } | null {
+    if (typeof sessionStorage === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem("tll_timeslayer_session");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
   // ── Connection ───────────────────────────────────────────────
 
   public connect(url?: string): Promise<boolean> {
@@ -157,7 +200,14 @@ export class NetworkService {
       }, 7000);
 
       socket.on("connect", () => {
-        if (settled) return;
+        if (settled) {
+          // Reconnection on transport glitch: auto-recover ongoing match
+          if (this.isOnlineMode && this.roomId && this.myRole) {
+            console.log(`[NetworkService] Reconnected transport. Attempting state restore for room ${this.roomId}...`);
+            this.reconnect().catch((err) => console.warn("[NetworkService] Auto-reconnect failed:", err));
+          }
+          return;
+        }
         settled = true;
         clearTimeout(timeoutId);
         console.log(`[NetworkService] Connected to server: ${this.serverUrl} (${socket.id})`);
@@ -291,7 +341,7 @@ export class NetworkService {
 
   // ── Room & Lobby Actions ─────────────────────────────────────
 
-  public createRoom(playerName?: string): Promise<{ success: boolean; roomId?: string; error?: string }> {
+  public createRoom(playerName?: string): Promise<{ success: boolean; roomId?: string; reconnectToken?: string; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket || !this.socket.connected) {
         return resolve({ success: false, error: "Not connected to server." });
@@ -300,9 +350,8 @@ export class NetworkService {
       const name = playerName || this.playerName;
       this.socket.emit("create_room", { playerName: name }, (res: any) => {
         if (res.success) {
-          this.roomId = res.roomId;
-          this.myRole = "p1";
-          resolve({ success: true, roomId: res.roomId });
+          this.saveSession(res.roomId, "p1", res.reconnectToken);
+          resolve({ success: true, roomId: res.roomId, reconnectToken: res.reconnectToken });
         } else {
           resolve({ success: false, error: "Failed to create room." });
         }
@@ -310,7 +359,7 @@ export class NetworkService {
     });
   }
 
-  public joinRoom(roomId: string, playerName?: string): Promise<{ success: boolean; error?: string }> {
+  public joinRoom(roomId: string, playerName?: string): Promise<{ success: boolean; role?: "p1" | "p2"; reconnectToken?: string; error?: string }> {
     return new Promise((resolve) => {
       if (!this.socket || !this.socket.connected) {
         return resolve({ success: false, error: "Not connected to server." });
@@ -321,9 +370,9 @@ export class NetworkService {
 
       this.socket.emit("join_room", { roomId: cleanCode, playerName: name }, (res: any) => {
         if (res.success) {
-          this.roomId = res.roomId || cleanCode;
-          this.myRole = res.role || "p2";
-          resolve({ success: true });
+          const role = res.role || "p2";
+          this.saveSession(res.roomId || cleanCode, role, res.reconnectToken);
+          resolve({ success: true, role, reconnectToken: res.reconnectToken });
         } else {
           resolve({ success: false, error: res.error || "Failed to join room." });
         }
@@ -331,7 +380,7 @@ export class NetworkService {
     });
   }
 
-  public matchmake(playerName?: string): Promise<{ success: boolean; roomId?: string; role?: "p1" | "p2" }> {
+  public matchmake(playerName?: string): Promise<{ success: boolean; roomId?: string; role?: "p1" | "p2"; reconnectToken?: string }> {
     return new Promise((resolve) => {
       if (!this.socket || !this.socket.connected) {
         return resolve({ success: false });
@@ -340,13 +389,38 @@ export class NetworkService {
       const name = playerName || this.playerName;
       this.socket.emit("matchmake", { playerName: name }, (res: any) => {
         if (res.success) {
-          this.roomId = res.roomId;
-          this.myRole = res.role;
-          resolve({ success: true, roomId: res.roomId, role: res.role });
+          this.saveSession(res.roomId, res.role, res.reconnectToken);
+          resolve({ success: true, roomId: res.roomId, role: res.role, reconnectToken: res.reconnectToken });
         } else {
           resolve({ success: false });
         }
       });
+    });
+  }
+
+  public reconnect(): Promise<{ success: boolean; state?: SanitizedGameState; error?: string }> {
+    return new Promise((resolve) => {
+      const session = this.getSavedSession();
+      const targetRoom = this.roomId || session?.roomId;
+      const targetRole = this.myRole || session?.role;
+      const targetToken = this.reconnectToken || session?.reconnectToken;
+
+      if (!this.socket || !this.socket.connected || !targetRoom || !targetRole) {
+        return resolve({ success: false, error: "No active room to reconnect to." });
+      }
+
+      this.socket.emit(
+        "reconnect_player",
+        { roomId: targetRoom, role: targetRole, reconnectToken: targetToken },
+        (res: any) => {
+          if (res?.success) {
+            this.saveSession(targetRoom, targetRole, targetToken);
+            resolve({ success: true, state: res.state });
+          } else {
+            resolve({ success: false, error: res?.error || "Reconnect failed." });
+          }
+        },
+      );
     });
   }
 
@@ -406,18 +480,20 @@ export class NetworkService {
     laneIndex?: number,
     targetId?: string,
     slotType?: "frontline" | "support",
-  ): Promise<{ success: boolean; error?: string; events?: GameEvent[] }> {
+  ): Promise<{ success: boolean; error?: string; events?: GameEvent[]; duplicate?: boolean }> {
     return new Promise((resolve) => {
       if (!this.socket || !this.roomId) {
         return resolve({ success: false, error: "Not in active online match." });
       }
 
+      const actionId = `act_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const payload = {
         roomId: this.roomId,
         cardId,
         laneIndex,
         targetId,
         slotType,
+        actionId,
       };
 
       this.socket.emit("ACTION_PLAY_CARD", payload, (res: any) => {
@@ -430,14 +506,24 @@ export class NetworkService {
    * Dispatches pass phase action to the authoritative server.
    * Emits both ACTION_PASS_PHASE and pass_turn for total interoperability.
    */
-  public passPhase(): Promise<{ success: boolean; error?: string; events?: GameEvent[] }> {
+  public passPhase(): Promise<{ success: boolean; error?: string; events?: GameEvent[]; duplicate?: boolean }> {
     return new Promise((resolve) => {
       if (!this.socket || !this.roomId) {
         return resolve({ success: false, error: "Not in active online match." });
       }
 
-      this.socket.emit("ACTION_PASS_PHASE", { roomId: this.roomId }, (res: any) => {
+      const actionId = `pass_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      this.socket.emit("ACTION_PASS_PHASE", { roomId: this.roomId, actionId }, (res: any) => {
         resolve(res || { success: true });
+      });
+    });
+  }
+
+  public surrender(): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.socket || !this.roomId) return resolve(false);
+      this.socket.emit("surrender", { roomId: this.roomId }, (res: any) => {
+        resolve(res?.success ?? false);
       });
     });
   }
@@ -448,11 +534,10 @@ export class NetworkService {
   }
 
   public leaveMatch(): void {
-    if (!this.socket || !this.roomId) return;
-    this.socket.emit("leave_room", { roomId: this.roomId });
-    this.roomId = null;
-    this.myRole = null;
-    this.isOnlineMode = false;
+    if (this.socket && this.roomId) {
+      this.socket.emit("leave_room", { roomId: this.roomId });
+    }
+    this.clearSession();
   }
 }
 
