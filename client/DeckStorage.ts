@@ -3,7 +3,7 @@
 //  Manages SavedDeck schema, default seeding, validation.
 // ============================================================
 
-import { CardDefinition, CardType } from "../src/types";
+import { CardDefinition, CardType, isSuperpowerCard } from "../src/types";
 import { createCardInstance } from "../src/cardInstance";
 import {
   DECK_VANGUARD_40,
@@ -14,6 +14,7 @@ import {
   HERO_ABYSSAL_SORCERER,
   HERO_SOLAR_FLARE,
   HERO_SUPER_BRAINZ,
+  getStaticCardById,
 } from "../src/cards";
 
 // ─────────────────────────────────────────────────────────────
@@ -148,10 +149,14 @@ export class DeckStorage {
       }
     }
 
+    const seenSuperpowers = new Set<string>();
     for (const id of cardIds) {
-      const card = catalogMap.get(id);
-      if (card && card.type === CardType.HeroAbility) {
-        errors.push(`Superpower cards cannot be placed in your main deck: "${card.name}".`);
+      const card = catalogMap.get(id) || getStaticCardById(id);
+      if (card && isSuperpowerCard(card)) {
+        if (!seenSuperpowers.has(id)) {
+          seenSuperpowers.add(id);
+          errors.push(`Superpower cards cannot be placed in your main deck: "${card.name}".`);
+        }
       }
     }
 
@@ -225,7 +230,7 @@ export class DeckStorage {
 // ─────────────────────────────────────────────────────────────
 
 export function buildCardCatalog(allCards: CardDefinition[]): CardDefinition[] {
-  return allCards.filter((c) => c.type !== CardType.HeroAbility);
+  return allCards.filter((c) => !isSuperpowerCard(c));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -238,9 +243,6 @@ export function hydrateCardIds(
 ): CardDefinition[] {
   const map = new Map(catalog.map((c) => [c.id, c]));
   return ids
-    .map((id) => {
-      const card = map.get(id);
-      return card ? createCardInstance(card) : null;
-    })
-    .filter((c): c is CardDefinition => !!c);
+    .map((id) => map.get(id))
+    .filter((c): c is CardDefinition => c !== undefined && c !== null);
 }

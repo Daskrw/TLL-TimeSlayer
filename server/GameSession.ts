@@ -10,6 +10,7 @@ import {
   PlayerId,
   PlayerState,
   TurnPhase,
+  isSuperpowerCard,
 } from "../src/types";
 import { GameEngine } from "../src/GameEngine";
 import { GameRoom, SanitizedGameState, SanitizedOpponentState } from "./types";
@@ -102,6 +103,7 @@ export class GameSession {
   public submitLoadout(role: "p1" | "p2", hero: Hero, deck: Card[]): boolean {
     const slot = role === "p1" ? this.room.players.p1 : this.room.players.p2;
     if (!slot) return false;
+    if (deck && deck.some((c) => isSuperpowerCard(c))) return false;
 
     slot.hero = hero;
     slot.deck = deck;

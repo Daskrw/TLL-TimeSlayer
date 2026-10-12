@@ -198,6 +198,15 @@ export interface SpellEffect {
   readonly summonCardId?: string;
 }
 
+export interface OnEnterEffect {
+  readonly grantKeyword?: Keyword;
+  readonly target?: "FRIENDLY_UNITS" | "ALL_UNITS";
+}
+
+export interface OnHeroDamageEffect {
+  readonly drawCards?: number;
+}
+
 export interface AuraEffect {
   readonly attackBonus?: number;
   readonly hpBonus?: number;
@@ -228,10 +237,29 @@ export interface Card {
   readonly environmentEffect?: EnvironmentEffect;
   readonly spellEffect?: SpellEffect;
   readonly auraEffect?: AuraEffect;
+  readonly onEnterEffect?: OnEnterEffect;
+  readonly onHeroDamageEffect?: OnHeroDamageEffect;
+  readonly adjacentLaneDamage?: boolean;
   readonly targetType?: TargetType;
 }
 
 export type CardDefinition = Card;
+
+/** Authoritative check for whether a card is a Hero Superpower card */
+export function isSuperpowerCard(
+  card: Card | { id: string; type?: CardType | string; tribe?: string; tribes?: readonly string[] } | null | undefined,
+): boolean {
+  if (!card) return false;
+  return (
+    card.type === CardType.HeroAbility ||
+    card.type === "HERO_ABILITY" ||
+    card.type === "HeroAbility" ||
+    card.tribe === "Superpower" ||
+    (card.tribes && card.tribes.includes("Superpower")) ||
+    card.id.startsWith("SP_") ||
+    card.id.startsWith("card_sp_")
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 //  Hero & Superpower Kit Definition (Symmetric)
@@ -312,6 +340,9 @@ export interface UnitInstance {
   attachedEquipment: Card[];
   deathrattleEffect?: DeathrattleEffect;
   auraEffect?: AuraEffect;
+  onEnterEffect?: OnEnterEffect;
+  onHeroDamageEffect?: OnHeroDamageEffect;
+  adjacentLaneDamage?: boolean;
   isFrozen: boolean;
   hasShield: boolean;
   isDeadly: boolean;

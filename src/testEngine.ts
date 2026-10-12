@@ -21,6 +21,7 @@ import {
   LaneType,
   GameEventType,
   CardType,
+  CardDefinition,
 } from "./types";
 import {
   HERO_AEGIS_GUARDIAN,
@@ -30,22 +31,139 @@ import {
   DECK_ZOMBIES_40,
   DECK_VANGUARD_40,
   DECK_ABYSSAL_40,
-  SUNFLOWER,
-  PEASHOOTER,
-  HOMING_THISTLE,
-  LILY_PAD,
-  TORCHWOOD,
-  BONK_CHOY,
-  BARREL_OF_DEADBEARDS,
   SPIKED_HELMET,
   SOLAR_WINDS,
   BLACK_HOLE,
-  LIGHTNING_REED,
   SP_SHIELD_OF_LEGEND,
   SP_HUMAN_SHIELD,
   SP_SUPPRESS_ANGER,
   SP_LEAVE_TO_DUST,
 } from "./cards";
+
+// Local test fixtures for engine feature verification
+const TEST_UNIT_NORMAL: CardDefinition = {
+  id: "TEST_UNIT_NORMAL",
+  name: "Test Normal Unit",
+  cost: 1,
+  attack: 1,
+  hp: 2,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+};
+
+const TEST_UNIT_NORMAL_2: CardDefinition = {
+  id: "TEST_UNIT_NORMAL_2",
+  name: "Test Normal Unit 2",
+  cost: 1,
+  attack: 1,
+  hp: 2,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+};
+
+const TEST_UNIT_NORMAL_3: CardDefinition = {
+  id: "TEST_UNIT_NORMAL_3",
+  name: "Test Normal Unit 3",
+  cost: 1,
+  attack: 1,
+  hp: 2,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+};
+
+const TEST_UNIT_FLYING: CardDefinition = {
+  id: "TEST_UNIT_FLYING",
+  name: "Test Flying Unit",
+  cost: 1,
+  attack: 1,
+  hp: 2,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [Keyword.Flying],
+  laneTypeRestriction: LaneType.Aerial,
+};
+
+const TEST_UNIT_AMPHIBIOUS: CardDefinition = {
+  id: "TEST_UNIT_AMPHIBIOUS",
+  name: "Test Amphibious Unit",
+  cost: 1,
+  attack: 1,
+  hp: 2,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [Keyword.Amphibious],
+  laneTypeRestriction: LaneType.Water,
+};
+
+const TEST_UNIT_SUPPORT: CardDefinition = {
+  id: "TEST_UNIT_SUPPORT",
+  name: "Test Support Unit",
+  cost: 1,
+  attack: 1,
+  hp: 2,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [Keyword.Support],
+};
+
+const TEST_UNIT_RUSH: CardDefinition = {
+  id: "TEST_UNIT_RUSH",
+  name: "Test Rush Unit",
+  cost: 1,
+  attack: 2,
+  hp: 2,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [Keyword.Rush],
+};
+
+const TEST_UNIT_DOUBLE_STRIKE: CardDefinition = {
+  id: "TEST_UNIT_DOUBLE_STRIKE",
+  name: "Test Double Strike Unit",
+  cost: 1,
+  attack: 3,
+  hp: 3,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [Keyword.DoubleStrike],
+};
+
+const TEST_SPELL_DAMAGE: CardDefinition = {
+  id: "TEST_SPELL_DAMAGE",
+  name: "Test Damage Spell",
+  cost: 1,
+  attack: 0,
+  hp: 0,
+  type: CardType.Spell,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+  spellEffect: { damage: 3, target: "UNIT" },
+  targetType: "ENEMY_UNIT",
+};
+
+const TEST_HIGH_COST_UNIT: CardDefinition = {
+  id: "TEST_HIGH_COST_UNIT",
+  name: "Test High Cost Unit",
+  cost: 3,
+  attack: 3,
+  hp: 3,
+  type: CardType.Unit,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+};
 
 function assert(condition: unknown, msg: string): asserts condition {
   if (!condition) {
@@ -105,23 +223,23 @@ console.log("\n▶ TEST 2: Lane Restrictions (Aerial / Ground / Water)");
   // Set mana high for testing plays
   const state = engine.getState();
   state.player.currentMana = 10;
-  state.player.hand = [SUNFLOWER, HOMING_THISTLE, LILY_PAD];
+  state.player.hand = [TEST_UNIT_NORMAL, TEST_UNIT_FLYING, TEST_UNIT_AMPHIBIOUS];
   (engine as unknown as { state: typeof state }).state = state;
 
-  // 1. Placing non-Flying Sunflower into Lane 0 (Aerial) should fail
-  const r1 = engine.playCard(PlayerId.Player, SUNFLOWER.id, 0);
+  // 1. Placing non-Flying unit into Lane 0 (Aerial) should fail
+  const r1 = engine.playCard(PlayerId.Player, TEST_UNIT_NORMAL.id, 0);
   assert(!r1.success, "Non-Flying unit cannot be placed in Lane 0 (Aerial)");
 
-  // 2. Placing Flying Homing Thistle into Lane 0 should succeed
-  const r2 = engine.playCard(PlayerId.Player, HOMING_THISTLE.id, 0);
+  // 2. Placing Flying unit into Lane 0 should succeed
+  const r2 = engine.playCard(PlayerId.Player, TEST_UNIT_FLYING.id, 0);
   assert(r2.success, "Flying unit placed successfully in Lane 0 (Aerial)");
 
-  // 3. Placing non-Amphibious Sunflower into Lane 3 (Water) should fail
-  const r3 = engine.playCard(PlayerId.Player, SUNFLOWER.id, 3);
+  // 3. Placing non-Amphibious unit into Lane 3 (Water) should fail
+  const r3 = engine.playCard(PlayerId.Player, TEST_UNIT_NORMAL.id, 3);
   assert(!r3.success, "Non-Amphibious unit cannot be placed in Lane 3 (Water)");
 
-  // 4. Placing Amphibious Lily Pad into Lane 3 should succeed
-  const r4 = engine.playCard(PlayerId.Player, LILY_PAD.id, 3);
+  // 4. Placing Amphibious unit into Lane 3 should succeed
+  const r4 = engine.playCard(PlayerId.Player, TEST_UNIT_AMPHIBIOUS.id, 3);
   assert(r4.success, "Amphibious unit placed successfully in Lane 3 (Water)");
 }
 
@@ -137,26 +255,26 @@ console.log("\n▶ TEST 3: Lane Capacity (Default 1 Unit, Max 2 ONLY with Suppor
 
   const state = engine.getState();
   state.player.currentMana = 10;
-  state.player.hand = [SUNFLOWER, PEASHOOTER, TORCHWOOD, BONK_CHOY];
+  state.player.hand = [TEST_UNIT_NORMAL, TEST_UNIT_NORMAL_2, TEST_UNIT_SUPPORT, TEST_UNIT_NORMAL_3];
   (engine as unknown as { state: typeof state }).state = state;
 
-  // 1. Place 1st unit (Sunflower) in Lane 1 -> SUT: Frontline
-  const r1 = engine.playCard(PlayerId.Player, SUNFLOWER.id, 1);
+  // 1. Place 1st unit in Lane 1 -> SUT: Frontline
+  const r1 = engine.playCard(PlayerId.Player, TEST_UNIT_NORMAL.id, 1);
   assert(r1.success, "Placed first unit (Frontline) in Lane 1");
   assert(engine.getState().lanes[1].playerFrontline !== null, "Frontline unit is occupied");
   assert(engine.getState().lanes[1].playerSupport === null, "Support slot is currently empty");
 
-  // 2. Place 2nd unit WITHOUT Support keyword (Peashooter) in Lane 1 -> must fail
-  const r2 = engine.playCard(PlayerId.Player, PEASHOOTER.id, 1);
+  // 2. Place 2nd unit WITHOUT Support keyword in Lane 1 -> must fail
+  const r2 = engine.playCard(PlayerId.Player, TEST_UNIT_NORMAL_2.id, 1);
   assert(!r2.success, "Placing 2nd unit without 'Support' keyword is rejected");
 
-  // 3. Place 2nd unit WITH Support keyword (Torchwood) in Lane 1 -> must succeed as Support
-  const r3 = engine.playCard(PlayerId.Player, TORCHWOOD.id, 1);
+  // 3. Place 2nd unit WITH Support keyword in Lane 1 -> must succeed as Support
+  const r3 = engine.playCard(PlayerId.Player, TEST_UNIT_SUPPORT.id, 1);
   assert(r3.success, "Placing 2nd unit with 'Support' keyword succeeds");
   assert(engine.getState().lanes[1].playerSupport !== null, "Support slot is now occupied");
 
   // 4. Place 3rd unit in Lane 1 -> must fail (capacity 2 exceeded)
-  const r4 = engine.playCard(PlayerId.Player, BONK_CHOY.id, 1);
+  const r4 = engine.playCard(PlayerId.Player, TEST_UNIT_NORMAL_3.id, 1);
   assert(!r4.success, "Placing 3rd unit in same lane is rejected (max 2 units reached)");
 }
 
@@ -221,9 +339,9 @@ console.log("\n▶ TEST 4: Environment Placement & Overwriting Rules");
 
   // Summon unit into lane 2
   const sSummon = engine.getState();
-  sSummon.player.hand = [PEASHOOTER];
+  sSummon.player.hand = [TEST_UNIT_NORMAL];
   (engine as unknown as { state: typeof sSummon }).state = sSummon;
-  engine.playCard(PlayerId.Player, PEASHOOTER.id, 2);
+  engine.playCard(PlayerId.Player, TEST_UNIT_NORMAL.id, 2);
 
   const summonedUnit = engine.getState().lanes[2].playerFrontline;
   assert(summonedUnit !== null, "Unit summoned in Lane 2");
@@ -245,11 +363,11 @@ console.log("\n▶ TEST 5: Equipment Attachment & Host Death Destruction");
 
   const state = engine.getState();
   state.player.currentMana = 10;
-  state.player.hand = [SUNFLOWER, SPIKED_HELMET];
+  state.player.hand = [TEST_UNIT_NORMAL, SPIKED_HELMET];
   (engine as unknown as { state: typeof state }).state = state;
 
-  // Summon Sunflower (1 atk, 2 hp)
-  engine.playCard(PlayerId.Player, SUNFLOWER.id, 1);
+  // Summon unit (1 atk, 2 hp)
+  engine.playCard(PlayerId.Player, TEST_UNIT_NORMAL.id, 1);
   const host = engine.getState().lanes[1].playerFrontline!;
 
   // Attach Spiked Helmet (+2 atk, +2 hp, Strikethrough)
@@ -275,12 +393,12 @@ console.log("\n▶ TEST 6: Rush Keyword (Immediate Placement Attack)");
 
   const state = engine.getState();
   state.player.currentMana = 10;
-  state.player.hand = [PEASHOOTER]; // Has Rush, 2 Atk
+  state.player.hand = [TEST_UNIT_RUSH]; // Has Rush, 2 Atk
   (engine as unknown as { state: typeof state }).state = state;
 
-  // Lane 1 opponent is empty -> Peashooter should attack enemy Hero directly for 2 damage
-  const rPlay = engine.playCard(PlayerId.Player, PEASHOOTER.id, 1);
-  assert(rPlay.success, "Played Peashooter with Rush keyword");
+  // Lane 1 opponent is empty -> Rush unit should attack enemy Hero directly for 2 damage
+  const rPlay = engine.playCard(PlayerId.Player, TEST_UNIT_RUSH.id, 1);
+  assert(rPlay.success, "Played unit with Rush keyword");
   assert(
     rPlay.events.some((e) => e.type === GameEventType.RUSH_ATTACK),
     "Emitted RUSH_ATTACK event immediately"
@@ -370,7 +488,7 @@ console.log("\n▶ TEST 8: Super-Block Auto-Draw (Bypassing 11 Hand Limit & Spel
 
   const state = engine.getState();
   // Fill Player hand to maximum limit (11 cards)
-  state.player.hand = Array(11).fill(SUNFLOWER);
+  state.player.hand = Array(11).fill(TEST_UNIT_NORMAL);
   state.player.superBlock.charges = 7; // Ready to trigger on next hit
 
   // Opponent attacks Player hero directly to trigger Super Block
@@ -416,7 +534,7 @@ console.log("\n▶ TEST 8: Super-Block Auto-Draw (Bypassing 11 Hand Limit & Spel
     cardId: "card_sunflower",
     ownerId: PlayerId.Player,
     laneIndex: 1,
-    name: "Friendly Sunflower",
+    name: "Friendly Unit",
     tribe: "รักษา",
     baseKeywords: [],
     keywords: [],
@@ -471,13 +589,13 @@ console.log("\n▶ TEST 9: DoubleStrike (Strike 1 Kills Front Unit, Strike 2 Hit
   const state = engine.getState();
   state.currentPhase = TurnPhase.COMBAT_PHASE;
 
-  // Player has Bonk Choy (3 attack, DoubleStrike) in Lane 1
+  // Player has Double Strike unit (3 attack, DoubleStrike) in Lane 1
   state.lanes[1].playerFrontline = {
     instanceId: "bonk",
-    cardId: BONK_CHOY.id,
+    cardId: TEST_UNIT_DOUBLE_STRIKE.id,
     ownerId: PlayerId.Player,
     laneIndex: 1,
-    name: BONK_CHOY.name,
+    name: TEST_UNIT_DOUBLE_STRIKE.name,
     tribe: "จู่โจม",
     baseKeywords: [Keyword.DoubleStrike],
     keywords: [Keyword.DoubleStrike],
@@ -522,12 +640,12 @@ console.log("\n▶ TEST 9: DoubleStrike (Strike 1 Kills Front Unit, Strike 2 Hit
   state.combatQueue = { currentLaneIndex: 1, currentStrike: 1, phaseStep: "STRIKE_1" };
   (engine as unknown as { state: typeof state }).state = state;
 
-  // Resolve Strike 1: Bonk Choy (3 atk) hits Fragile Zombie (2 hp) -> Zombie dies!
+  // Resolve Strike 1: Unit (3 atk) hits Fragile Zombie (2 hp) -> Zombie dies!
   const step1 = engine.resolveCombatStep();
   assert(!step1.done, "Combat in lane continues to Strike 2 for DoubleStrike");
   assert(engine.getState().lanes[1].opponentFrontline === null, "Strike 1 killed opposing unit");
 
-  // Resolve Strike 2: Bonk Choy hits empty lane -> Opponent Hero directly!
+  // Resolve Strike 2: Unit hits empty lane -> Opponent Hero directly!
   const step2 = engine.resolveCombatStep();
   assert(
     step2.events.some(
@@ -553,12 +671,12 @@ console.log("\n▶ TEST 10: Cascading Deathrattles (Chain Reaction to Adjacent L
   const state = engine.getState();
   state.currentPhase = TurnPhase.P1_SPELL_PHASE;
   state.player.currentMana = 10;
-  state.player.hand = [LIGHTNING_REED]; // 3 damage spell
+  state.player.hand = [TEST_SPELL_DAMAGE]; // 3 damage spell
 
-  // Lane 1 has Barrel of Deadbeards (1 HP, Deathrattle: 1 damage to adjacent lanes)
+  // Lane 1 has Barrel 1 (1 HP, Deathrattle: 1 damage to adjacent lanes)
   state.lanes[1].opponentFrontline = {
     instanceId: "barrel_1",
-    cardId: BARREL_OF_DEADBEARDS.id,
+    cardId: "barrel_unit_id",
     ownerId: PlayerId.Opponent,
     laneIndex: 1,
     name: "Barrel 1",
@@ -579,10 +697,10 @@ console.log("\n▶ TEST 10: Cascading Deathrattles (Chain Reaction to Adjacent L
     auraModifiers: [],
   };
 
-  // Adjacent Lane 2 has another Barrel of Deadbeards (1 HP)
+  // Adjacent Lane 2 has another Barrel 2 (1 HP)
   state.lanes[2].opponentFrontline = {
     instanceId: "barrel_2",
-    cardId: BARREL_OF_DEADBEARDS.id,
+    cardId: "barrel_unit_id",
     ownerId: PlayerId.Opponent,
     laneIndex: 2,
     name: "Barrel 2",
@@ -605,8 +723,8 @@ console.log("\n▶ TEST 10: Cascading Deathrattles (Chain Reaction to Adjacent L
 
   (engine as unknown as { state: typeof state }).state = state;
 
-  // Cast Lightning Reed on Barrel 1 in Lane 1 -> Dies -> Deals 1 dmg to Lane 2 -> Barrel 2 Dies! (Chain reaction)
-  const rSpell = engine.playCard(PlayerId.Player, LIGHTNING_REED.id, 1, "barrel_1");
+  // Cast damage spell on Barrel 1 in Lane 1 -> Dies -> Deals 1 dmg to Lane 2 -> Barrel 2 Dies! (Chain reaction)
+  const rSpell = engine.playCard(PlayerId.Player, TEST_SPELL_DAMAGE.id, 1, "barrel_1");
   assert(rSpell.success, "Casting damage spell on first Barrel");
 
   const sAfter = engine.getState();
@@ -629,7 +747,7 @@ console.log("\n▶ TEST 11: Insufficient Mana Check & Zero State Mutation");
 
   const state = engine.getState();
   state.player.currentMana = 1;
-  const highCostCard = DECK_PLANTS_40.find((c) => c.cost > 1 && c.type === CardType.Unit)!;
+  const highCostCard = TEST_HIGH_COST_UNIT;
   state.player.hand = [highCostCard];
   (engine as unknown as { state: typeof state }).state = state;
 
@@ -694,8 +812,8 @@ console.log("\n▶ TEST 13: Flexible Support Slot Placement & Direct Combat Clas
   const state = engine.getState();
   state.player.currentMana = 10;
   
-  const supportCard = DECK_PLANTS_40.find((c) => c.keywords.includes(Keyword.Support) && c.type === CardType.Unit)!;
-  const regularCard = DECK_PLANTS_40.find((c) => !c.keywords.includes(Keyword.Support) && c.type === CardType.Unit && !c.keywords.includes(Keyword.Flying) && !c.keywords.includes(Keyword.Amphibious))!;
+  const supportCard = TEST_UNIT_SUPPORT;
+  const regularCard = TEST_UNIT_NORMAL;
 
   state.player.hand = [supportCard, regularCard];
   (engine as unknown as { state: typeof state }).state = state;

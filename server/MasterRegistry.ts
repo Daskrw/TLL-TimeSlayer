@@ -111,6 +111,36 @@ export const LEGACY_HERO_IDS = new Set([
   "HERO_SUPER_BRAINZ",
 ]);
 
+export const DELETED_CARD_IDS = new Set([
+  // 20 Old Units
+  "PEASHOOTER",
+  "SUNFLOWER",
+  "WALL_NUT",
+  "BONK_CHOY",
+  "CHOMPER",
+  "TALL_NUT",
+  "REPEATER",
+  "BROWNCOAT",
+  "CONEHEAD",
+  "BUCKETHEAD",
+  "DISCO_ZOMBIE",
+  "FOOTBALL_ZOMBIE",
+  "GARGANTUAR",
+  "CARD_AERIAL_ACE",
+  "CARD_CLOUD_WEAVER",
+  "CARD_CORAL_HUNTER",
+  "CARD_TRENCH_LURKER",
+  "CARD_STORMBOUND_EAGLE",
+  "CARD_ZEPHYR_MAGE",
+  "CARD_LEVIATHAN_BEHEMOTH",
+  // 5 Old Spells
+  "POTATO_MINE",
+  "CHERRY_BOMB",
+  "BUNGEE_PLUMBER",
+  "ZOMBOT_WRATH",
+  "CARD_TIDAL_SURGE",
+]);
+
 export const CORE_KEYWORDS: string[] = [
   "สนับสนุน",
   "โจมตีต่อเนื่อง",
@@ -168,6 +198,7 @@ export class MasterRegistry {
 
         // Populate cards
         for (const card of data.cards || []) {
+          if (DELETED_CARD_IDS.has(card.id)) continue;
           const rawCost = Number(card.cost);
           const cost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : (card.cost ?? 0);
           this.cardsMap.set(card.id, {

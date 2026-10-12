@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": 1791735158965,
+  "updatedAt": 1791809080861,
   "heroes": [
     {
       "id": "hero_aegis_guardian",
@@ -25,8 +25,8 @@
         "card_sp_suppress_anger",
         "card_sp_leave_to_dust"
       ],
-      "updatedAt": 0,
-      "isActive": true
+      "isActive": true,
+      "updatedAt": 0
     },
     {
       "id": "HERO_SKY_VANGUARD",
@@ -115,291 +115,77 @@
   ],
   "cards": [
     {
-      "id": "card_sp_shield_of_legend",
-      "name": "Shield of Legend",
-      "type": "HERO_ABILITY",
-      "cost": 0,
-      "attack": 0,
-      "hp": 0,
-      "tribes": [
-        "Superpower"
-      ],
-      "tribe": "Superpower",
-      "keywords": [],
-      "text": "เมื่อใช้ จนจบเทิร์นนี้ ฮีโร่ของคุณและยูนิททั้งหมดของคุณจะไม่ได้รับความเสียหายทุกกรณี",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "card_sp_human_shield",
-      "name": "Human Shield",
-      "type": "EQUIPMENT",
-      "cost": 1,
-      "attack": 0,
-      "hp": 0,
-      "tribes": [
-        "Superpower"
-      ],
-      "tribe": "Superpower",
-      "keywords": [
-        "ทนทาน"
-      ],
-      "text": "เลือกสวมให้ยูนิทฝ่ายเรา 1 ตัวในสนาม ยูนิทนั้นได้รับ HP +2 และได้รับคีย์เวิร์ด 'ทนทาน' (Armor / ทนทาน)",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "card_sp_suppress_anger",
-      "name": "Suppress one's anger",
-      "type": "HERO_ABILITY",
-      "cost": 1,
-      "attack": 0,
-      "hp": 0,
-      "tribes": [
-        "Superpower"
-      ],
-      "tribe": "Superpower",
-      "keywords": [],
-      "text": "เมื่อใช้ จั่วการ์ด 2 ใบ: ยูนิทที่มี HP สูงสุดในเด็ค 1 ใบ และการ์ดเวท 1 ใบ",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "card_sp_leave_to_dust",
-      "name": "Leave it to the dust",
-      "type": "HERO_ABILITY",
-      "cost": 1,
-      "attack": 0,
-      "hp": 0,
-      "tribes": [
-        "Superpower"
-      ],
-      "tribe": "Superpower",
-      "keywords": [],
-      "text": "เมื่อใช้ ทำให้ยูนิทศัตรูทั้งหมดในสนาม Atk -1",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_SUNFLOWER",
-      "name": "Sunflower",
+      "id": "CARD_DEATH_DRAW_1",
+      "name": "Soul Harvester",
       "type": "UNIT",
       "cost": 1,
       "attack": 1,
-      "hp": 2,
-      "tribes": [
-        "รักษา"
-      ],
-      "tribe": "รักษา",
-      "keywords": [],
-      "text": "A cheerful healer. (No keywords — basic vanilla unit.)",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_PEASHOOTER",
-      "name": "Peashooter",
-      "type": "UNIT",
-      "cost": 2,
-      "attack": 2,
-      "hp": 2,
-      "tribes": [
-        "จอมพล"
-      ],
-      "tribe": "จอมพล",
-      "keywords": [
-        "จู่โจม"
-      ],
-      "text": "Fires immediately upon planting.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_WALL_NUT",
-      "name": "Wall-nut",
-      "type": "UNIT",
-      "cost": 2,
-      "attack": 0,
-      "hp": 5,
-      "tribes": [
-        "พิทักษ์"
-      ],
-      "tribe": "พิทักษ์",
-      "keywords": [],
-      "text": "A sturdy wall. Low attack, very high HP.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_BONK_CHOY",
-      "name": "Bonk Choy",
-      "type": "UNIT",
-      "cost": 3,
-      "attack": 3,
-      "hp": 3,
-      "tribes": [
-        "จู่โจม"
-      ],
-      "tribe": "จู่โจม",
-      "keywords": [
-        "โจมตีต่อเนื่อง"
-      ],
-      "text": "Punches twice! Hits the opposing unit twice in combat.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_CHOMPER",
-      "name": "Chomper",
-      "type": "UNIT",
-      "cost": 3,
-      "attack": 4,
-      "hp": 2,
-      "tribes": [
-        "จู่โจม"
-      ],
-      "tribe": "จู่โจม",
-      "keywords": [
-        "เกลียดชังตำนาน"
-      ],
-      "text": "Bites through — deals damage to both the unit and the hero behind it.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_TALLNUT",
-      "name": "Tall-nut",
-      "type": "UNIT",
-      "cost": 4,
-      "attack": 1,
-      "hp": 8,
-      "tribes": [
-        "พิทักษ์"
-      ],
-      "tribe": "พิทักษ์",
-      "keywords": [
-        "DEATHRATTLE"
-      ],
-      "text": "When Tall-nut is destroyed, it leaves behind a Wall-nut (effect handled by deathrattle registry).",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_HOMING_THISTLE",
-      "name": "Homing Thistle",
-      "type": "UNIT",
-      "cost": 2,
-      "attack": 2,
       "hp": 1,
       "tribes": [
-        "ปัญญา"
+        "ปัญญา",
+        "เป็นกลาง"
       ],
       "tribe": "ปัญญา",
       "keywords": [
-        "อากาศยาน",
-        "จู่โจม"
+        "DEATHRATTLE"
       ],
-      "text": "A flying plant that strikes the moment it lands.",
+      "text": "เมื่อยูนิตนี้ถูกทำลาย เจ้าของจั่วการ์ด 1 ใบ (When this unit is destroyed, its owner draws 1 card.)",
+      "deathrattleEffect": {
+        "drawCards": 1,
+        "description": "When this unit is destroyed, its owner draws 1 card."
+      },
       "imageUrl": "",
       "updatedAt": 0
     },
     {
-      "id": "CARD_ROTOBAGA",
-      "name": "Rotobaga",
-      "type": "UNIT",
-      "cost": 3,
-      "attack": 2,
-      "hp": 3,
-      "tribes": [
-        "ยุทธศาสตร์"
-      ],
-      "tribe": "ยุทธศาสตร์",
-      "keywords": [
-        "อากาศยาน",
-        "เกลียดชังตำนาน"
-      ],
-      "text": "Flies above the battlefield and pierces through everything below.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_AIR_RAID_ZOMBIE",
-      "name": "Air Raid Zombie",
-      "type": "UNIT",
-      "cost": 4,
-      "attack": 4,
-      "hp": 3,
-      "tribes": [
-        "จอมพล"
-      ],
-      "tribe": "จอมพล",
-      "keywords": [
-        "อากาศยาน",
-        "โจมตีต่อเนื่อง"
-      ],
-      "text": "An airborne zombie that strikes twice.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_LILY_PAD",
-      "name": "Lily Pad",
+      "id": "CARD_DEATH_DRAW_2",
+      "name": "Grave Watcher",
       "type": "UNIT",
       "cost": 1,
-      "attack": 0,
-      "hp": 3,
+      "attack": 1,
+      "hp": 1,
       "tribes": [
-        "รักษา"
+        "รักษา",
+        "เป็นกลาง"
       ],
       "tribe": "รักษา",
       "keywords": [
-        "กองเรือ"
-      ],
-      "text": "Floats on water. No attack, but gives allied aquatic units cover.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_SPIKEWEED_AQUA",
-      "name": "Aqua Spikeweed",
-      "type": "UNIT",
-      "cost": 2,
-      "attack": 1,
-      "hp": 4,
-      "tribes": [
-        "ยุทธศาสตร์"
-      ],
-      "tribe": "ยุทธศาสตร์",
-      "keywords": [
-        "กองเรือ",
         "DEATHRATTLE"
       ],
-      "text": "A submerged spikeweed. On death, deals 1 damage to all enemies (future registry effect).",
+      "text": "เมื่อยูนิตนี้ถูกทำลาย เจ้าของจั่วการ์ด 1 ใบ (When this unit is destroyed, its owner draws 1 card.)",
+      "deathrattleEffect": {
+        "drawCards": 1,
+        "description": "When this unit is destroyed, its owner draws 1 card."
+      },
       "imageUrl": "",
       "updatedAt": 0
     },
     {
-      "id": "CARD_SEA_ZOMBIE",
-      "name": "Sea Zombie",
+      "id": "CARD_DEATH_DRAW_3",
+      "name": "Crypt Scribe",
       "type": "UNIT",
-      "cost": 3,
-      "attack": 3,
-      "hp": 3,
+      "cost": 1,
+      "attack": 1,
+      "hp": 1,
       "tribes": [
-        "ยุทธศาสตร์"
+        "ยุทธศาสตร์",
+        "เป็นกลาง"
       ],
       "tribe": "ยุทธศาสตร์",
       "keywords": [
-        "กองเรือ",
-        "จู่โจม"
+        "DEATHRATTLE"
       ],
-      "text": "Lunges from the water immediately.",
+      "text": "เมื่อยูนิตนี้ถูกทำลาย เจ้าของจั่วการ์ด 1 ใบ (When this unit is destroyed, its owner draws 1 card.)",
+      "deathrattleEffect": {
+        "drawCards": 1,
+        "description": "When this unit is destroyed, its owner draws 1 card."
+      },
       "imageUrl": "",
       "updatedAt": 0
     },
     {
-      "id": "CARD_BASIC_ZOMBIE",
-      "name": "Basic Zombie",
+      "id": "CARD_VANILLA_1",
+      "name": "Recruit Scout",
       "type": "UNIT",
       "cost": 1,
       "attack": 1,
@@ -409,243 +195,100 @@
       ],
       "tribe": "เป็นกลาง",
       "keywords": [],
-      "text": "The most basic of all undead.",
+      "text": "ยูนิตพื้นฐานทั่วไป ไม่มีอบิลิตี้ (Ordinary vanilla unit with no abilities.)",
       "imageUrl": "",
       "updatedAt": 0
     },
     {
-      "id": "CARD_CONEHEAD_ZOMBIE",
-      "name": "Cone-head Zombie",
+      "id": "CARD_VANILLA_2",
+      "name": "Iron Sentry",
       "type": "UNIT",
-      "cost": 2,
-      "attack": 2,
-      "hp": 3,
-      "tribes": [
-        "พิทักษ์"
-      ],
-      "tribe": "พิทักษ์",
-      "keywords": [],
-      "text": "Wears a cone for extra protection.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_BUCKETHEAD_ZOMBIE",
-      "name": "Buckethead Zombie",
-      "type": "UNIT",
-      "cost": 3,
-      "attack": 2,
-      "hp": 5,
-      "tribes": [
-        "พิทักษ์"
-      ],
-      "tribe": "พิทักษ์",
-      "keywords": [
-        "DEATHRATTLE"
-      ],
-      "text": "Upon defeat, the bucket becomes a shield for another zombie (deathrattle registry).",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_ZOMBIE_JESTER",
-      "name": "Jester Zombie",
-      "type": "UNIT",
-      "cost": 2,
-      "attack": 3,
+      "cost": 1,
+      "attack": 1,
       "hp": 1,
       "tribes": [
-        "จู่โจม"
+        "พิทักษ์",
+        "เป็นกลาง"
       ],
-      "tribe": "จู่โจม",
-      "keywords": [
-        "เกลียดชังตำนาน",
-        "จู่โจม"
-      ],
-      "text": "Rushes in and stabs through everything.",
+      "tribe": "พิทักษ์",
+      "keywords": [],
+      "text": "ยูนิตพื้นฐานทั่วไป ไม่มีอบิลิตี้ (Ordinary vanilla unit with no abilities.)",
       "imageUrl": "",
       "updatedAt": 0
     },
     {
-      "id": "CARD_BULLY_ZOMBIE",
-      "name": "Bully Zombie",
+      "id": "CARD_VANILLA_3",
+      "name": "Border Vanguard",
       "type": "UNIT",
-      "cost": 3,
-      "attack": 3,
-      "hp": 3,
-      "tribes": [
-        "จู่โจม"
-      ],
-      "tribe": "จู่โจม",
-      "keywords": [
-        "โจมตีต่อเนื่อง",
-        "เกลียดชังตำนาน"
-      ],
-      "text": "Double-strikes with full piercing on each hit.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "SPELL_FERTILIZE",
-      "name": "Fertilize",
-      "type": "SPELL",
-      "cost": 2,
-      "attack": 0,
-      "hp": 0,
-      "tribes": [
-        "จอมอาคม"
-      ],
-      "tribe": "จอมอาคม",
-      "keywords": [],
-      "targetType": "FRIENDLY_UNIT",
-      "text": "Give a friendly unit +2/+2.",
-      "spellEffect": {
-        "buffAttack": 2,
-        "buffHp": 2,
-        "target": "UNIT"
-      },
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "SPELL_LIGHTNING_REED",
-      "name": "Lightning Reed",
-      "type": "SPELL",
-      "cost": 3,
-      "attack": 0,
-      "hp": 0,
-      "tribes": [
-        "จอมอาคม"
-      ],
-      "tribe": "จอมอาคม",
-      "keywords": [],
-      "targetType": "SINGLE_UNIT",
-      "text": "Deal 3 damage to any target.",
-      "spellEffect": {
-        "damage": 3,
-        "target": "UNIT"
-      },
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "SPELL_BRAINS",
-      "name": "Brains for Brains",
-      "type": "SPELL",
       "cost": 1,
-      "attack": 0,
-      "hp": 0,
+      "attack": 1,
+      "hp": 1,
       "tribes": [
-        "ปัญญา"
+        "จอมพล",
+        "เป็นกลาง"
+      ],
+      "tribe": "จอมพล",
+      "keywords": [],
+      "text": "ยูนิตพื้นฐานทั่วไป ไม่มีอบิลิตี้ (Ordinary vanilla unit with no abilities.)",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_GRANT_DURABILITY",
+      "name": "Aegis Armorer",
+      "type": "UNIT",
+      "cost": 1,
+      "attack": 1,
+      "hp": 1,
+      "tribes": [
+        "พิทักษ์",
+        "เป็นกลาง"
+      ],
+      "tribe": "พิทักษ์",
+      "keywords": [],
+      "text": "เมื่อยูนิตนี้ลงสู่สนาม ยูนิตฝ่ายเราทั้งหมดได้รับคีย์เวิร์ด 'ทนทาน' (When this unit enters the battlefield, your units gain the 'ทนทาน' keyword.)",
+      "onEnterEffect": {
+        "grantKeyword": "ทนทาน",
+        "target": "FRIENDLY_UNITS"
+      },
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "CARD_HERO_DAMAGE_DRAW",
+      "name": "Phantom Infiltrator",
+      "type": "UNIT",
+      "cost": 1,
+      "attack": 1,
+      "hp": 1,
+      "tribes": [
+        "ปัญญา",
+        "เป็นกลาง"
       ],
       "tribe": "ปัญญา",
       "keywords": [],
-      "targetType": "NONE",
-      "text": "Draw 2 cards.",
-      "spellEffect": {
-        "drawCards": 2
+      "text": "เมื่อยูนิตนี้สร้างความเสียหายจากการต่อสู้แก่ฮีโร่ฝ่ายตรงข้าม เจ้าของจั่วการ์ด 1 ใบ (When this unit deals combat damage to the opposing hero, its owner draws 1 card.)",
+      "onHeroDamageEffect": {
+        "drawCards": 1
       },
       "imageUrl": "",
       "updatedAt": 0
     },
     {
-      "id": "SPELL_WEED_SPRAY",
-      "name": "Weed Spray",
-      "type": "SPELL",
-      "cost": 4,
-      "attack": 0,
-      "hp": 0,
-      "tribes": [
-        "จอมอาคม"
-      ],
-      "tribe": "จอมอาคม",
-      "keywords": [],
-      "targetType": "ALL_ENEMIES",
-      "text": "Deal 2 damage to all enemy units.",
-      "spellEffect": {
-        "damage": 2,
-        "target": "ALL_UNITS"
-      },
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_TORCHWOOD",
-      "name": "Torchwood",
+      "id": "CARD_ADJACENT_DAMAGE",
+      "name": "Cleave Berserker",
       "type": "UNIT",
       "cost": 1,
-      "attack": 0,
-      "hp": 4,
-      "tribes": [
-        "จอมพล"
-      ],
-      "tribe": "จอมพล",
-      "keywords": [
-        "สนับสนุน"
-      ],
-      "text": "Support: Shares a lane behind a frontline unit.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_CHEF_ZOMBIE",
-      "name": "Chef Zombie",
-      "type": "UNIT",
-      "cost": 2,
       "attack": 1,
-      "hp": 3,
-      "tribes": [
-        "จอมพล"
-      ],
-      "tribe": "จอมพล",
-      "keywords": [
-        "สนับสนุน"
-      ],
-      "text": "Support: Backline support that feeds allies.",
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_DOOM_SHROOM",
-      "name": "Doom-shroom",
-      "type": "UNIT",
-      "cost": 4,
-      "attack": 0,
-      "hp": 2,
-      "tribes": [
-        "ยุทธศาสตร์"
-      ],
-      "tribe": "ยุทธศาสตร์",
-      "keywords": [
-        "DEATHRATTLE"
-      ],
-      "text": "Deathrattle: Deals 3 damage to all units in adjacent lanes!",
-      "deathrattleEffect": {
-        "damage": 3,
-        "target": "ADJACENT_LANES"
-      },
-      "imageUrl": "",
-      "updatedAt": 0
-    },
-    {
-      "id": "CARD_BARREL_DEADBEARDS",
-      "name": "Barrel of Deadbeards",
-      "type": "UNIT",
-      "cost": 2,
-      "attack": 0,
       "hp": 1,
       "tribes": [
-        "ยุทธศาสตร์"
+        "จู่โจม",
+        "เป็นกลาง"
       ],
-      "tribe": "ยุทธศาสตร์",
-      "keywords": [
-        "DEATHRATTLE"
-      ],
-      "text": "Deathrattle: Deals 1 damage to all units in adjacent lanes!",
-      "deathrattleEffect": {
-        "damage": 1,
-        "target": "ADJACENT_LANES"
-      },
+      "tribe": "จู่โจม",
+      "keywords": [],
+      "text": "เมื่อยูนิตนี้สร้างความเสียหาย สร้างความเสียหายแก่ยูนิตในเลนที่ติดกันทางซ้ายและขวาด้วย (Whenever this unit deals damage, also deal damage to units in the immediately adjacent lane on its left and right.)",
+      "adjacentLaneDamage": true,
       "imageUrl": "",
       "updatedAt": 0
     },
@@ -731,6 +374,84 @@
       },
       "laneTypeRestriction": "GROUND_1",
       "text": "Environment: Ground lanes only. Deals 2 damage to all units in lane at turn end.",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "card_sp_shield_of_legend",
+      "name": "Shield of Legend",
+      "type": "HERO_ABILITY",
+      "cost": 0,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {},
+      "text": "เมื่อใช้ จนจบเทิร์นนี้ ฮีโร่ของคุณและยูนิททั้งหมดของคุณจะไม่ได้รับความเสียหายทุกกรณี",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "card_sp_human_shield",
+      "name": "Human Shield",
+      "type": "EQUIPMENT",
+      "cost": 1,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "FRIENDLY_UNIT",
+      "equipmentEffect": {
+        "attackBonus": 0,
+        "hpBonus": 2,
+        "grantedKeywords": [
+          "ทนทาน"
+        ]
+      },
+      "text": "เลือกสวมให้ยูนิทฝ่ายเรา 1 ตัวในสนาม ยูนิทนั้นได้รับ HP +2 และได้รับคีย์เวิร์ด 'ทนทาน' (Armor / ทนทาน)",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "card_sp_suppress_anger",
+      "name": "Suppress one's anger",
+      "type": "HERO_ABILITY",
+      "cost": 1,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {},
+      "text": "เมื่อใช้ จั่วการ์ด 2 ใบ: ยูนิทที่มี HP สูงสุดในเด็ค 1 ใบ และการ์ดเวท 1 ใบ",
+      "imageUrl": "",
+      "updatedAt": 0
+    },
+    {
+      "id": "card_sp_leave_to_dust",
+      "name": "Leave it to the dust",
+      "type": "HERO_ABILITY",
+      "cost": 1,
+      "attack": 0,
+      "hp": 0,
+      "tribes": [
+        "Superpower"
+      ],
+      "tribe": "Superpower",
+      "keywords": [],
+      "targetType": "NONE",
+      "spellEffect": {},
+      "text": "เมื่อใช้ ทำให้ยูนิทศัตรูทั้งหมดในสนาม Atk -1",
       "imageUrl": "",
       "updatedAt": 0
     },

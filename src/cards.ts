@@ -13,7 +13,10 @@ import {
   EquipmentEffect,
   EnvironmentEffect,
   SpellEffect,
+  OnEnterEffect,
+  OnHeroDamageEffect,
   TargetType,
+  isSuperpowerCard,
 } from "./types";
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -34,6 +37,11 @@ function unit(
   text?: string,
   laneTypeRestriction?: LaneType,
   deathrattleEffect?: DeathrattleEffect,
+  extra?: {
+    onEnterEffect?: OnEnterEffect;
+    onHeroDamageEffect?: OnHeroDamageEffect;
+    adjacentLaneDamage?: boolean;
+  },
 ): CardDefinition {
   const tribes = normalizeTribes(tribe);
   return {
@@ -41,9 +49,12 @@ function unit(
     tribes,
     tribe: tribes[0] || "เป็นกลาง",
     keywords,
-    ...(text               !== undefined ? { text }               : {}),
-    ...(laneTypeRestriction !== undefined ? { laneTypeRestriction } : {}),
-    ...(deathrattleEffect   !== undefined ? { deathrattleEffect }   : {}),
+    ...(text                !== undefined ? { text }                : {}),
+    ...(laneTypeRestriction !== undefined ? { laneTypeRestriction }  : {}),
+    ...(deathrattleEffect   !== undefined ? { deathrattleEffect }    : {}),
+    ...(extra?.onEnterEffect      !== undefined ? { onEnterEffect: extra.onEnterEffect } : {}),
+    ...(extra?.onHeroDamageEffect !== undefined ? { onHeroDamageEffect: extra.onHeroDamageEffect } : {}),
+    ...(extra?.adjacentLaneDamage !== undefined ? { adjacentLaneDamage: extra.adjacentLaneDamage } : {}),
   };
 }
 
@@ -134,169 +145,121 @@ function superpower(
   };
 }
 
-// ─── Ground Units ─────────────────────────────────────────────
-export const SUNFLOWER: CardDefinition = unit(
-  "CARD_SUNFLOWER", "Sunflower", 1, 1, 2, "รักษา",
-  [],
-  "A cheerful healer. (No keywords — basic vanilla unit.)",
-);
-
-export const PEASHOOTER: CardDefinition = unit(
-  "CARD_PEASHOOTER", "Peashooter", 2, 2, 2, "จอมพล",
-  [Keyword.Rush],
-  "Fires immediately upon planting.",
-);
-
-export const WALL_NUT: CardDefinition = unit(
-  "CARD_WALL_NUT", "Wall-nut", 2, 0, 5, "พิทักษ์",
-  [],
-  "A sturdy wall. Low attack, very high HP.",
-);
-
-export const BONK_CHOY: CardDefinition = unit(
-  "CARD_BONK_CHOY", "Bonk Choy", 3, 3, 3, "จู่โจม",
-  [Keyword.DoubleStrike],
-  "Punches twice! Hits the opposing unit twice in combat.",
-);
-
-export const CHOMPER: CardDefinition = unit(
-  "CARD_CHOMPER", "Chomper", 3, 4, 2, "จู่โจม",
-  [Keyword.Piercing],
-  "Bites through — deals damage to both the unit and the hero behind it.",
-);
-
-export const TALLNUT: CardDefinition = unit(
-  "CARD_TALLNUT", "Tall-nut", 4, 1, 8, "พิทักษ์",
+// ─── Canonical Reset Unit Cards (Group A: Death Draw — 3 Cards) ───────────
+// Ability: "When this unit is destroyed, its owner draws 1 card."
+export const CARD_DEATH_DRAW_1: CardDefinition = unit(
+  "CARD_DEATH_DRAW_1",
+  "Soul Harvester",
+  1, 1, 1,
+  ["ปัญญา", "เป็นกลาง"],
   [Keyword.Deathrattle],
-  "When Tall-nut is destroyed, it leaves behind a Wall-nut (effect handled by deathrattle registry).",
-);
-
-// ─── Aerial Units (Lane 0 only) ───────────────────────────────
-export const HOMING_THISTLE: CardDefinition = unit(
-  "CARD_HOMING_THISTLE", "Homing Thistle", 2, 2, 1, "ปัญญา",
-  [Keyword.Flying, Keyword.Rush],
-  "A flying plant that strikes the moment it lands.",
-);
-
-export const ROTOBAGA: CardDefinition = unit(
-  "CARD_ROTOBAGA", "Rotobaga", 3, 2, 3, "ยุทธศาสตร์",
-  [Keyword.Flying, Keyword.Piercing],
-  "Flies above the battlefield and pierces through everything below.",
-);
-
-export const AIR_RAID_ZOMBIE: CardDefinition = unit(
-  "CARD_AIR_RAID_ZOMBIE", "Air Raid Zombie", 4, 4, 3, "จอมพล",
-  [Keyword.Flying, Keyword.DoubleStrike],
-  "An airborne zombie that strikes twice.",
-);
-
-// ─── Water Units (Lane 3 only) ────────────────────────────────
-export const LILY_PAD: CardDefinition = unit(
-  "CARD_LILY_PAD", "Lily Pad", 1, 0, 3, "รักษา",
-  [Keyword.Amphibious],
-  "Floats on water. No attack, but gives allied aquatic units cover.",
-);
-
-export const SPIKEWEED: CardDefinition = unit(
-  "CARD_SPIKEWEED_AQUA", "Aqua Spikeweed", 2, 1, 4, "ยุทธศาสตร์",
-  [Keyword.Amphibious, Keyword.Deathrattle],
-  "A submerged spikeweed. On death, deals 1 damage to all enemies (future registry effect).",
-);
-
-export const SEA_ZOMBIE: CardDefinition = unit(
-  "CARD_SEA_ZOMBIE", "Sea Zombie", 3, 3, 3, "ยุทธศาสตร์",
-  [Keyword.Amphibious, Keyword.Rush],
-  "Lunges from the water immediately.",
-);
-
-// ─── Zombie Ground Units ──────────────────────────────────────
-export const BASIC_ZOMBIE: CardDefinition = unit(
-  "CARD_BASIC_ZOMBIE", "Basic Zombie", 1, 1, 1, "เป็นกลาง",
-  [],
-  "The most basic of all undead.",
-);
-
-export const CONEHEAD_ZOMBIE: CardDefinition = unit(
-  "CARD_CONEHEAD_ZOMBIE", "Cone-head Zombie", 2, 2, 3, "พิทักษ์",
-  [],
-  "Wears a cone for extra protection.",
-);
-
-export const BUCKETHEAD_ZOMBIE: CardDefinition = unit(
-  "CARD_BUCKETHEAD_ZOMBIE", "Buckethead Zombie", 3, 2, 5, "พิทักษ์",
-  [Keyword.Deathrattle],
-  "Upon defeat, the bucket becomes a shield for another zombie (deathrattle registry).",
-);
-
-export const ZOMBIE_JESTER: CardDefinition = unit(
-  "CARD_ZOMBIE_JESTER", "Jester Zombie", 2, 3, 1, "จู่โจม",
-  [Keyword.Piercing, Keyword.Rush],
-  "Rushes in and stabs through everything.",
-);
-
-export const BULLY_ZOMBIE: CardDefinition = unit(
-  "CARD_BULLY_ZOMBIE", "Bully Zombie", 3, 3, 3, "จู่โจม",
-  [Keyword.DoubleStrike, Keyword.Piercing],
-  "Double-strikes with full piercing on each hit.",
-);
-
-// ─── Spells ───────────────────────────────────────────────────
-export const FERTILIZE: CardDefinition = spell(
-  "SPELL_FERTILIZE", "Fertilize", 2, "จอมอาคม",
-  "Give a friendly unit +2/+2.",
-  { buffAttack: 2, buffHp: 2, target: "UNIT" },
-  "FRIENDLY_UNIT",
-);
-
-export const LIGHTNING_REED: CardDefinition = spell(
-  "SPELL_LIGHTNING_REED", "Lightning Reed", 3, "จอมอาคม",
-  "Deal 3 damage to any target.",
-  { damage: 3, target: "UNIT" },
-  "SINGLE_UNIT",
-);
-
-export const BRAINS_FOR_BRAINS: CardDefinition = spell(
-  "SPELL_BRAINS", "Brains for Brains", 1, "ปัญญา",
-  "Draw 2 cards.",
-  { drawCards: 2 },
-  "NONE",
-);
-
-export const WEED_SPRAY: CardDefinition = spell(
-  "SPELL_WEED_SPRAY", "Weed Spray", 4, "จอมอาคม",
-  "Deal 2 damage to all enemy units.",
-  { damage: 2, target: "ALL_UNITS" },
-  "ALL_ENEMIES",
-);
-
-// ─── Support Units ───────────────────────────────────────────
-export const TORCHWOOD: CardDefinition = unit(
-  "CARD_TORCHWOOD", "Torchwood", 1, 0, 4, "จอมพล",
-  [Keyword.Support],
-  "Support: Shares a lane behind a frontline unit.",
-);
-
-export const CHEF_ZOMBIE: CardDefinition = unit(
-  "CARD_CHEF_ZOMBIE", "Chef Zombie", 2, 1, 3, "จอมพล",
-  [Keyword.Support],
-  "Support: Backline support that feeds allies.",
-);
-
-// ─── Deathrattle Cascading Units ──────────────────────────────
-export const DOOM_SHROOM: CardDefinition = unit(
-  "CARD_DOOM_SHROOM", "Doom-shroom", 4, 0, 2, "ยุทธศาสตร์",
-  [Keyword.Deathrattle],
-  "Deathrattle: Deals 3 damage to all units in adjacent lanes!",
+  "เมื่อยูนิตนี้ถูกทำลาย เจ้าของจั่วการ์ด 1 ใบ (When this unit is destroyed, its owner draws 1 card.)",
   undefined,
-  { damage: 3, target: "ADJACENT_LANES" },
+  { drawCards: 1, description: "When this unit is destroyed, its owner draws 1 card." },
 );
 
-export const BARREL_OF_DEADBEARDS: CardDefinition = unit(
-  "CARD_BARREL_DEADBEARDS", "Barrel of Deadbeards", 2, 0, 1, "ยุทธศาสตร์",
+export const CARD_DEATH_DRAW_2: CardDefinition = unit(
+  "CARD_DEATH_DRAW_2",
+  "Grave Watcher",
+  1, 1, 1,
+  ["รักษา", "เป็นกลาง"],
   [Keyword.Deathrattle],
-  "Deathrattle: Deals 1 damage to all units in adjacent lanes!",
+  "เมื่อยูนิตนี้ถูกทำลาย เจ้าของจั่วการ์ด 1 ใบ (When this unit is destroyed, its owner draws 1 card.)",
   undefined,
-  { damage: 1, target: "ADJACENT_LANES" },
+  { drawCards: 1, description: "When this unit is destroyed, its owner draws 1 card." },
+);
+
+export const CARD_DEATH_DRAW_3: CardDefinition = unit(
+  "CARD_DEATH_DRAW_3",
+  "Crypt Scribe",
+  1, 1, 1,
+  ["ยุทธศาสตร์", "เป็นกลาง"],
+  [Keyword.Deathrattle],
+  "เมื่อยูนิตนี้ถูกทำลาย เจ้าของจั่วการ์ด 1 ใบ (When this unit is destroyed, its owner draws 1 card.)",
+  undefined,
+  { drawCards: 1, description: "When this unit is destroyed, its owner draws 1 card." },
+);
+
+// ─── Canonical Reset Unit Cards (Group B: Vanilla Units — 3 Cards) ────────
+// Ability: Ordinary vanilla units with no abilities or keywords.
+export const CARD_VANILLA_1: CardDefinition = unit(
+  "CARD_VANILLA_1",
+  "Recruit Scout",
+  1, 1, 1,
+  ["เป็นกลาง"],
+  [],
+  "ยูนิตพื้นฐานทั่วไป ไม่มีอบิลิตี้ (Ordinary vanilla unit with no abilities.)",
+);
+
+export const CARD_VANILLA_2: CardDefinition = unit(
+  "CARD_VANILLA_2",
+  "Iron Sentry",
+  1, 1, 1,
+  ["พิทักษ์", "เป็นกลาง"],
+  [],
+  "ยูนิตพื้นฐานทั่วไป ไม่มีอบิลิตี้ (Ordinary vanilla unit with no abilities.)",
+);
+
+export const CARD_VANILLA_3: CardDefinition = unit(
+  "CARD_VANILLA_3",
+  "Border Vanguard",
+  1, 1, 1,
+  ["จอมพล", "เป็นกลาง"],
+  [],
+  "ยูนิตพื้นฐานทั่วไป ไม่มีอบิลิตี้ (Ordinary vanilla unit with no abilities.)",
+);
+
+// ─── Canonical Reset Unit Cards (Group C: Grant Durability — 1 Card) ──────
+// Ability: "When this unit enters the battlefield, your units gain the 'ทนทาน' keyword."
+export const CARD_GRANT_DURABILITY: CardDefinition = unit(
+  "CARD_GRANT_DURABILITY",
+  "Aegis Armorer",
+  1, 1, 1,
+  ["พิทักษ์", "เป็นกลาง"],
+  [],
+  "เมื่อยูนิตนี้ลงสู่สนาม ยูนิตฝ่ายเราทั้งหมดได้รับคีย์เวิร์ด 'ทนทาน' (When this unit enters the battlefield, your units gain the 'ทนทาน' keyword.)",
+  undefined,
+  undefined,
+  {
+    onEnterEffect: {
+      grantKeyword: Keyword.Armored,
+      target: "FRIENDLY_UNITS",
+    },
+  },
+);
+
+// ─── Canonical Reset Unit Cards (Group D: Hero Damage Draw — 1 Card) ──────
+// Ability: "When this unit deals combat damage to the opposing hero, its owner draws 1 card."
+export const CARD_HERO_DAMAGE_DRAW: CardDefinition = unit(
+  "CARD_HERO_DAMAGE_DRAW",
+  "Phantom Infiltrator",
+  1, 1, 1,
+  ["ปัญญา", "เป็นกลาง"],
+  [],
+  "เมื่อยูนิตนี้สร้างความเสียหายจากการต่อสู้แก่ฮีโร่ฝ่ายตรงข้าม เจ้าของจั่วการ์ด 1 ใบ (When this unit deals combat damage to the opposing hero, its owner draws 1 card.)",
+  undefined,
+  undefined,
+  {
+    onHeroDamageEffect: {
+      drawCards: 1,
+    },
+  },
+);
+
+// ─── Canonical Reset Unit Cards (Group E: Adjacent Lane Damage — 1 Card) ──
+// Ability: "Whenever this unit deals damage, also deal damage to units in the immediately adjacent lane on its left and right."
+export const CARD_ADJACENT_DAMAGE: CardDefinition = unit(
+  "CARD_ADJACENT_DAMAGE",
+  "Cleave Berserker",
+  1, 1, 1,
+  ["จู่โจม", "เป็นกลาง"],
+  [],
+  "เมื่อยูนิตนี้สร้างความเสียหาย สร้างความเสียหายแก่ยูนิตในเลนที่ติดกันทางซ้ายและขวาด้วย (Whenever this unit deals damage, also deal damage to units in the immediately adjacent lane on its left and right.)",
+  undefined,
+  undefined,
+  {
+    adjacentLaneDamage: true,
+  },
 );
 
 // ─── Equipment Cards ──────────────────────────────────────────
@@ -618,120 +581,47 @@ export const HERO_SUPER_BRAINZ = HERO_AEGIS_GUARDIAN;
 
 // ─── Pre-built Sample Decks ───────────────────────────────────
 
-/** A 20-card Plant deck covering all lane types and keywords. */
-export const SAMPLE_PLANT_DECK: CardDefinition[] = [
-  SUNFLOWER, SUNFLOWER,
-  PEASHOOTER, PEASHOOTER,
-  WALL_NUT, WALL_NUT,
-  BONK_CHOY, BONK_CHOY,
-  CHOMPER,
-  TALLNUT,
-  HOMING_THISTLE, HOMING_THISTLE,
-  ROTOBAGA,
-  LILY_PAD, LILY_PAD,
-  SPIKEWEED,
-  FERTILIZE, FERTILIZE,
-  LIGHTNING_REED, LIGHTNING_REED,
-];
-
-/** A 20-card Zombie deck covering all lane types and keywords. */
-export const SAMPLE_ZOMBIE_DECK: CardDefinition[] = [
-  BASIC_ZOMBIE, BASIC_ZOMBIE,
-  CONEHEAD_ZOMBIE, CONEHEAD_ZOMBIE,
-  BUCKETHEAD_ZOMBIE,
-  ZOMBIE_JESTER, ZOMBIE_JESTER,
-  BULLY_ZOMBIE,
-  AIR_RAID_ZOMBIE,
-  SEA_ZOMBIE, SEA_ZOMBIE,
-  BRAINS_FOR_BRAINS, BRAINS_FOR_BRAINS,
-  WEED_SPRAY,
-  BASIC_ZOMBIE,
-  CONEHEAD_ZOMBIE,
-  BUCKETHEAD_ZOMBIE,
-  ZOMBIE_JESTER,
-  SEA_ZOMBIE,
-  AIR_RAID_ZOMBIE,
-];
-
 /** Standard 40-card competitive Plant Deck */
 export const DECK_PLANTS_40: CardDefinition[] = [
-  SUNFLOWER, SUNFLOWER, SUNFLOWER, SUNFLOWER,
-  PEASHOOTER, PEASHOOTER, PEASHOOTER, PEASHOOTER,
-  WALL_NUT, WALL_NUT, WALL_NUT,
-  TORCHWOOD, TORCHWOOD, TORCHWOOD,
-  BONK_CHOY, BONK_CHOY, BONK_CHOY,
-  CHOMPER, CHOMPER,
-  TALLNUT, TALLNUT,
-  DOOM_SHROOM, DOOM_SHROOM,
-  HOMING_THISTLE, HOMING_THISTLE, HOMING_THISTLE,
-  ROTOBAGA, ROTOBAGA,
-  LILY_PAD, LILY_PAD,
-  SPIKEWEED, SPIKEWEED,
-  FERTILIZE, FERTILIZE,
-  FERTILIZER_PACK, FERTILIZER_PACK,
+  CARD_DEATH_DRAW_1, CARD_DEATH_DRAW_1, CARD_DEATH_DRAW_1, CARD_DEATH_DRAW_1,
+  CARD_DEATH_DRAW_2, CARD_DEATH_DRAW_2, CARD_DEATH_DRAW_2, CARD_DEATH_DRAW_2,
+  CARD_DEATH_DRAW_3, CARD_DEATH_DRAW_3, CARD_DEATH_DRAW_3, CARD_DEATH_DRAW_3,
+  CARD_VANILLA_1, CARD_VANILLA_1, CARD_VANILLA_1, CARD_VANILLA_1,
+  CARD_VANILLA_2, CARD_VANILLA_2, CARD_VANILLA_2, CARD_VANILLA_2,
+  CARD_VANILLA_3, CARD_VANILLA_3, CARD_VANILLA_3, CARD_VANILLA_3,
+  CARD_GRANT_DURABILITY, CARD_GRANT_DURABILITY, CARD_GRANT_DURABILITY, CARD_GRANT_DURABILITY,
+  CARD_HERO_DAMAGE_DRAW, CARD_HERO_DAMAGE_DRAW, CARD_HERO_DAMAGE_DRAW, CARD_HERO_DAMAGE_DRAW,
+  CARD_ADJACENT_DAMAGE, CARD_ADJACENT_DAMAGE, CARD_ADJACENT_DAMAGE, CARD_ADJACENT_DAMAGE,
+  SPIKED_HELMET, SPIKED_HELMET,
   SOLAR_WINDS, SOLAR_WINDS,
-  LIGHTNING_REED, LIGHTNING_REED,
 ];
 
 /** Standard 40-card competitive Zombie Deck */
 export const DECK_ZOMBIES_40: CardDefinition[] = [
-  BASIC_ZOMBIE, BASIC_ZOMBIE, BASIC_ZOMBIE, BASIC_ZOMBIE,
-  CHEF_ZOMBIE, CHEF_ZOMBIE, CHEF_ZOMBIE,
-  CONEHEAD_ZOMBIE, CONEHEAD_ZOMBIE, CONEHEAD_ZOMBIE,
-  BUCKETHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE,
-  BARREL_OF_DEADBEARDS, BARREL_OF_DEADBEARDS,
-  ZOMBIE_JESTER, ZOMBIE_JESTER, ZOMBIE_JESTER,
-  BULLY_ZOMBIE, BULLY_ZOMBIE,
-  AIR_RAID_ZOMBIE, AIR_RAID_ZOMBIE, AIR_RAID_ZOMBIE,
-  SEA_ZOMBIE, SEA_ZOMBIE, SEA_ZOMBIE,
-  SPIKED_HELMET, SPIKED_HELMET, SPIKED_HELMET,
+  CARD_DEATH_DRAW_1, CARD_DEATH_DRAW_1, CARD_DEATH_DRAW_1, CARD_DEATH_DRAW_1,
+  CARD_DEATH_DRAW_2, CARD_DEATH_DRAW_2, CARD_DEATH_DRAW_2, CARD_DEATH_DRAW_2,
+  CARD_DEATH_DRAW_3, CARD_DEATH_DRAW_3, CARD_DEATH_DRAW_3, CARD_DEATH_DRAW_3,
+  CARD_VANILLA_1, CARD_VANILLA_1, CARD_VANILLA_1, CARD_VANILLA_1,
+  CARD_VANILLA_2, CARD_VANILLA_2, CARD_VANILLA_2, CARD_VANILLA_2,
+  CARD_VANILLA_3, CARD_VANILLA_3, CARD_VANILLA_3, CARD_VANILLA_3,
+  CARD_GRANT_DURABILITY, CARD_GRANT_DURABILITY, CARD_GRANT_DURABILITY, CARD_GRANT_DURABILITY,
+  CARD_HERO_DAMAGE_DRAW, CARD_HERO_DAMAGE_DRAW, CARD_HERO_DAMAGE_DRAW, CARD_HERO_DAMAGE_DRAW,
+  CARD_ADJACENT_DAMAGE, CARD_ADJACENT_DAMAGE, CARD_ADJACENT_DAMAGE, CARD_ADJACENT_DAMAGE,
+  FERTILIZER_PACK, FERTILIZER_PACK,
   BLACK_HOLE, BLACK_HOLE,
-  BRAINS_FOR_BRAINS, BRAINS_FOR_BRAINS, BRAINS_FOR_BRAINS,
-  WEED_SPRAY, WEED_SPRAY,
-  CONEHEAD_ZOMBIE,
-  BUCKETHEAD_ZOMBIE,
-  BULLY_ZOMBIE,
-  SEA_ZOMBIE,
-  AIR_RAID_ZOMBIE,
 ];
 
 /** Standard 40-card competitive Vanguard / Sky Deck */
-export const DECK_VANGUARD_40: CardDefinition[] = [
-  HOMING_THISTLE, HOMING_THISTLE, HOMING_THISTLE, HOMING_THISTLE,
-  ROTOBAGA, ROTOBAGA, ROTOBAGA, ROTOBAGA,
-  AIR_RAID_ZOMBIE, AIR_RAID_ZOMBIE,
-  PEASHOOTER, PEASHOOTER, PEASHOOTER, PEASHOOTER,
-  BONK_CHOY, BONK_CHOY, BONK_CHOY,
-  TORCHWOOD, TORCHWOOD, TORCHWOOD,
-  CHOMPER, CHOMPER,
-  WALL_NUT, WALL_NUT, WALL_NUT,
-  FERTILIZE, FERTILIZE,
-  FERTILIZER_PACK, FERTILIZER_PACK,
-  LIGHTNING_REED, LIGHTNING_REED, LIGHTNING_REED,
-  DOOM_SHROOM, DOOM_SHROOM,
-  SOLAR_WINDS, SOLAR_WINDS,
-  LILY_PAD, LILY_PAD,
-  SEA_ZOMBIE, SEA_ZOMBIE,
-];
+export const DECK_VANGUARD_40: CardDefinition[] = [...DECK_PLANTS_40];
 
 /** Standard 40-card competitive Abyssal / Sorcerer Deck */
-export const DECK_ABYSSAL_40: CardDefinition[] = [
-  LILY_PAD, LILY_PAD, LILY_PAD, LILY_PAD,
-  SPIKEWEED, SPIKEWEED, SPIKEWEED, SPIKEWEED,
-  SEA_ZOMBIE, SEA_ZOMBIE, SEA_ZOMBIE, SEA_ZOMBIE,
-  TALLNUT, TALLNUT, TALLNUT,
-  BUCKETHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE,
-  CHEF_ZOMBIE, CHEF_ZOMBIE, CHEF_ZOMBIE,
-  BARREL_OF_DEADBEARDS, BARREL_OF_DEADBEARDS,
-  ZOMBIE_JESTER, ZOMBIE_JESTER,
-  BULLY_ZOMBIE, BULLY_ZOMBIE,
-  SPIKED_HELMET, SPIKED_HELMET, SPIKED_HELMET,
-  BLACK_HOLE, BLACK_HOLE,
-  BRAINS_FOR_BRAINS, BRAINS_FOR_BRAINS, BRAINS_FOR_BRAINS,
-  WEED_SPRAY, WEED_SPRAY,
-  CONEHEAD_ZOMBIE, CONEHEAD_ZOMBIE,
-  BASIC_ZOMBIE, BASIC_ZOMBIE,
-];
+export const DECK_ABYSSAL_40: CardDefinition[] = [...DECK_ZOMBIES_40];
+
+/** A 20-card Plant deck covering sample archetypes. */
+export const SAMPLE_PLANT_DECK: CardDefinition[] = DECK_PLANTS_40.slice(0, 20);
+
+/** A 20-card Zombie deck covering sample archetypes. */
+export const SAMPLE_ZOMBIE_DECK: CardDefinition[] = DECK_ZOMBIES_40.slice(0, 20);
 
 // ─────────────────────────────────────────────────────────────
 //  Master Static Registry
@@ -740,28 +630,42 @@ export const DECK_ABYSSAL_40: CardDefinition[] = [
 export const ALL_STATIC_CARDS: CardDefinition[] = (() => {
   const seen = new Set<string>();
   const all: CardDefinition[] = [
-    SUNFLOWER, PEASHOOTER, WALL_NUT, BONK_CHOY, CHOMPER, TALLNUT,
-    HOMING_THISTLE, ROTOBAGA, AIR_RAID_ZOMBIE,
-    LILY_PAD, SPIKEWEED, SEA_ZOMBIE,
-    BASIC_ZOMBIE, CONEHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE,
-    ZOMBIE_JESTER, BULLY_ZOMBIE,
-    FERTILIZE, LIGHTNING_REED,
-    BRAINS_FOR_BRAINS, WEED_SPRAY,
-    TORCHWOOD, CHEF_ZOMBIE,
-    DOOM_SHROOM, BARREL_OF_DEADBEARDS,
-    SPIKED_HELMET, FERTILIZER_PACK,
-    SOLAR_WINDS, BLACK_HOLE,
-    // Superpowers
-    SP_SHIELD_OF_LEGEND, SP_HUMAN_SHIELD,
-    SP_SUPPRESS_ANGER, SP_LEAVE_TO_DUST,
-    SP_SKY_STRIKE, SP_AERIAL_SURGE,
-    SP_TAILWIND_DRAFT, SP_GLACIAL_GALE,
-    SP_TIDAL_WAVE, SP_SOOTHING_CURRENT,
-    SP_CORAL_AEGIS, SP_AQUATIC_CONJURATION,
-    SP_SUNBURN, SP_WEED_WHACKER,
-    SP_MORE_SPORE, SP_SUN_BURST,
-    SP_TELEPATHY, SP_CARRIED_AWAY,
-    SP_SUPER_STENCH, SP_CUT_DOWN_TO_SIZE,
+    // Exactly 9 Canonical Reset Units
+    CARD_DEATH_DRAW_1,
+    CARD_DEATH_DRAW_2,
+    CARD_DEATH_DRAW_3,
+    CARD_VANILLA_1,
+    CARD_VANILLA_2,
+    CARD_VANILLA_3,
+    CARD_GRANT_DURABILITY,
+    CARD_HERO_DAMAGE_DRAW,
+    CARD_ADJACENT_DAMAGE,
+    // Preserved Non-Unit / Non-Spell Cards
+    SPIKED_HELMET,
+    FERTILIZER_PACK,
+    SOLAR_WINDS,
+    BLACK_HOLE,
+    // Preserved Hero Superpowers
+    SP_SHIELD_OF_LEGEND,
+    SP_HUMAN_SHIELD,
+    SP_SUPPRESS_ANGER,
+    SP_LEAVE_TO_DUST,
+    SP_SKY_STRIKE,
+    SP_AERIAL_SURGE,
+    SP_TAILWIND_DRAFT,
+    SP_GLACIAL_GALE,
+    SP_TIDAL_WAVE,
+    SP_SOOTHING_CURRENT,
+    SP_CORAL_AEGIS,
+    SP_AQUATIC_CONJURATION,
+    SP_SUNBURN,
+    SP_WEED_WHACKER,
+    SP_MORE_SPORE,
+    SP_SUN_BURST,
+    SP_TELEPATHY,
+    SP_CARRIED_AWAY,
+    SP_SUPER_STENCH,
+    SP_CUT_DOWN_TO_SIZE,
   ];
   return all.filter((c) => {
     if (seen.has(c.id)) return false;
@@ -769,6 +673,8 @@ export const ALL_STATIC_CARDS: CardDefinition[] = (() => {
     return true;
   });
 })();
+
+export const ALL_CARDS: CardDefinition[] = ALL_STATIC_CARDS;
 
 const _staticCardsMap = new Map<string, CardDefinition>(
   ALL_STATIC_CARDS.map((c) => [c.id, c])

@@ -10,7 +10,7 @@
 //  Entry: generateBotDeck(heroId, difficulty?, seed?) → CardDefinition[]
 // ============================================================
 
-import { CardDefinition, CardType, Keyword, LaneType } from "./types";
+import { CardDefinition, CardType, Keyword, LaneType, isSuperpowerCard } from "./types";
 import { ALL_STATIC_CARDS } from "./cards";
 import { createCardInstance } from "./cardInstance";
 
@@ -28,7 +28,7 @@ function getCardPool(
 } {
   const pool = customPool && customPool.length > 0
     ? customPool
-    : ALL_STATIC_CARDS.filter((c) => c.type !== CardType.HeroAbility);
+    : ALL_STATIC_CARDS.filter((c) => !isSuperpowerCard(c));
 
   return {
     units: pool.filter((c) => c.type === CardType.Unit),
@@ -58,8 +58,8 @@ const HERO_ARCHETYPE_MAP: Record<string, HeroArchetypeMap> = {
     primary: "Control",
     secondary: "Midrange",
     coreCards: [
-      "CARD_WALL_NUT", "CARD_TALLNUT", "CARD_BUCKETHEAD_ZOMBIE",
-      "CARD_SUNFLOWER", "CARD_BONK_CHOY", "CARD_CHEF_ZOMBIE",
+      "CARD_GRANT_DURABILITY", "CARD_VANILLA_2", "CARD_DEATH_DRAW_1",
+      "CARD_VANILLA_1", "CARD_DEATH_DRAW_2", "CARD_VANILLA_3",
     ],
     preferredKeywords: [Keyword.Armored, Keyword.Aura, Keyword.Support],
     preferredLanes: [undefined, LaneType.Ground1],
@@ -68,8 +68,8 @@ const HERO_ARCHETYPE_MAP: Record<string, HeroArchetypeMap> = {
     primary: "Aggro",
     secondary: "Midrange",
     coreCards: [
-      "CARD_HOMING_THISTLE", "CARD_ROTOBAGA", "CARD_AIR_RAID_ZOMBIE",
-      "CARD_PEASHOOTER", "CARD_BONK_CHOY", "CARD_CHOMPER",
+      "CARD_HERO_DAMAGE_DRAW", "CARD_ADJACENT_DAMAGE", "CARD_VANILLA_1",
+      "CARD_DEATH_DRAW_1", "CARD_VANILLA_2", "CARD_DEATH_DRAW_2",
     ],
     preferredKeywords: [Keyword.Flying, Keyword.Rush, Keyword.DoubleStrike],
     preferredLanes: [LaneType.Aerial, undefined],
@@ -78,8 +78,8 @@ const HERO_ARCHETYPE_MAP: Record<string, HeroArchetypeMap> = {
     primary: "Control",
     secondary: "Midrange",
     coreCards: [
-      "CARD_LILY_PAD", "CARD_SPIKEWEED_AQUA", "CARD_SEA_ZOMBIE",
-      "CARD_TALLNUT", "CARD_BUCKETHEAD_ZOMBIE", "CARD_CHEF_ZOMBIE",
+      "CARD_DEATH_DRAW_1", "CARD_DEATH_DRAW_2", "CARD_DEATH_DRAW_3",
+      "CARD_GRANT_DURABILITY", "CARD_VANILLA_2", "CARD_VANILLA_3",
     ],
     preferredKeywords: [Keyword.Amphibious, Keyword.Deathrattle],
     preferredLanes: [LaneType.Water, undefined],
@@ -88,8 +88,8 @@ const HERO_ARCHETYPE_MAP: Record<string, HeroArchetypeMap> = {
     primary: "Midrange",
     secondary: "Aggro",
     coreCards: [
-      "CARD_SUNFLOWER", "CARD_PEASHOOTER", "CARD_BONK_CHOY",
-      "CARD_CHOMPER", "CARD_WALL_NUT", "CARD_TORCHWOOD",
+      "CARD_HERO_DAMAGE_DRAW", "CARD_DEATH_DRAW_1", "CARD_VANILLA_1",
+      "CARD_ADJACENT_DAMAGE", "CARD_VANILLA_2", "CARD_DEATH_DRAW_2",
     ],
     preferredKeywords: [Keyword.Rush, Keyword.Piercing, Keyword.DoubleStrike],
     preferredLanes: [undefined, LaneType.Ground1],
@@ -98,8 +98,8 @@ const HERO_ARCHETYPE_MAP: Record<string, HeroArchetypeMap> = {
     primary: "Control",
     secondary: "Aggro",
     coreCards: [
-      "CARD_BASIC_ZOMBIE", "CARD_CONEHEAD_ZOMBIE", "CARD_BULLY_ZOMBIE",
-      "CARD_ZOMBIE_JESTER", "CARD_CHEF_ZOMBIE", "CARD_BUCKETHEAD_ZOMBIE",
+      "CARD_ADJACENT_DAMAGE", "CARD_DEATH_DRAW_3", "CARD_VANILLA_3",
+      "CARD_HERO_DAMAGE_DRAW", "CARD_GRANT_DURABILITY", "CARD_VANILLA_1",
     ],
     preferredKeywords: [Keyword.DoubleStrike, Keyword.Piercing, Keyword.Rush],
     preferredLanes: [undefined, LaneType.Ground2],

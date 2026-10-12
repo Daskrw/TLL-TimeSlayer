@@ -449,6 +449,18 @@ export class GameEngine {
     this.seq = 0;
     const events: GameEvent[] = [];
 
+    // Authoritatively reject decks containing Superpower cards
+    for (const c of p1Deck) {
+      if (isSuperpowerCard(c)) {
+        throw new Error(`Superpower cards cannot be placed in your main deck: "${c.name}".`);
+      }
+    }
+    for (const c of p2Deck) {
+      if (isSuperpowerCard(c)) {
+        throw new Error(`Superpower cards cannot be placed in your main deck: "${c.name}".`);
+      }
+    }
+
     // Deep clone and decouple all card instances for both decks
     const p1DecoupledDeck = p1Deck.map((c) => createCardInstance(c));
     const p2DecoupledDeck = p2Deck.map((c) => createCardInstance(c));
@@ -882,6 +894,9 @@ export class GameEngine {
         auraModifiers: [],
         ...(card.deathrattleEffect ? { deathrattleEffect: card.deathrattleEffect } : {}),
         ...(card.auraEffect ? { auraEffect: card.auraEffect } : {}),
+        ...(card.onEnterEffect ? { onEnterEffect: card.onEnterEffect } : {}),
+        ...(card.onHeroDamageEffect ? { onHeroDamageEffect: card.onHeroDamageEffect } : {}),
+        ...(card.adjacentLaneDamage ? { adjacentLaneDamage: card.adjacentLaneDamage } : {}),
       };
 
       if (isP1) {
@@ -905,6 +920,27 @@ export class GameEngine {
 
       // Recalculate auras after new unit placement
       this.recalculateAuras(s, events);
+
+      // On-Enter Ability Execution (Group C: Grant Durability / ทนทาน to friendly units)
+      if (unitInstance.onEnterEffect?.grantKeyword && unitInstance.onEnterEffect.target === "FRIENDLY_UNITS") {
+        const kw = unitInstance.onEnterEffect.grantKeyword;
+        for (const l of s.lanes) {
+          const friendlyList = isP1
+            ? [l.playerFrontline, l.playerSupport]
+            : [l.opponentFrontline, l.opponentSupport];
+          for (const fu of friendlyList) {
+            if (fu && !fu.keywords.includes(kw)) {
+              fu.keywords.push(kw);
+              this.emit(events, GameEventType.UNIT_BUFFED, `"${fu.name}" gained '${kw}' keyword from "${unitInstance.name}".`, {
+                targetInstanceId: fu.instanceId,
+                grantedKeyword: kw,
+                sourceInstanceId: unitInstance.instanceId,
+                ownerId: playerId,
+              });
+            }
+          }
+        }
+      }
 
       // Rush Keyword Execution: attacks immediately upon placement
       const hasRush = unitInstance.keywords.some((k) => k === Keyword.Rush || (k as string) === "จู่โจม" || (k as string) === "RUSH");
@@ -1588,6 +1624,8 @@ export class GameEngine {
       }
     }
 
+    const adjacentProcdAttackers = new Set<string>();
+
     // 3. Apply Damages simultaneously
     for (const dmg of pendingDamages) {
       let dealt = 0;
@@ -1596,7 +1634,34 @@ export class GameEngine {
       } else if (dmg.targetType === "HERO" && dmg.heroPlayerId) {
         dealt = this.applyDamageToHero(s, dmg.heroPlayerId, dmg.damage, dmg.attackerId, laneIdx, events);
         if (s.superBlockInterrupt !== null) {
+          if (dealt > 0 && dmg.attackerId) {
+            const attacker = this.findUnitById(s, dmg.attackerId);
+            if (attacker && attacker.onHeroDamageEffect?.drawCards) {
+              for (let i = 0; i < attacker.onHeroDamageEffect.drawCards; i++) {
+                this.drawCard(s, attacker.ownerId, events);
+              }
+            }
+          }
           break;
+        }
+      }
+
+      // Hero Damage Draw (Group D: Trigger only on successful combat damage to opposing hero)
+      if (dmg.targetType === "HERO" && dealt > 0 && dmg.attackerId) {
+        const attacker = this.findUnitById(s, dmg.attackerId);
+        if (attacker && attacker.onHeroDamageEffect?.drawCards) {
+          for (let i = 0; i < attacker.onHeroDamageEffect.drawCards; i++) {
+            this.drawCard(s, attacker.ownerId, events);
+          }
+        }
+      }
+
+      // Adjacent Lane Damage (Group E: Trigger whenever unit deals damage)
+      if (dealt > 0 && dmg.attackerId && !adjacentProcdAttackers.has(dmg.attackerId)) {
+        const attacker = this.findUnitById(s, dmg.attackerId);
+        if (attacker && attacker.adjacentLaneDamage) {
+          adjacentProcdAttackers.add(dmg.attackerId);
+          this.applyAdjacentLaneDamage(s, attacker, laneIdx, events);
         }
       }
 
@@ -1620,6 +1685,37 @@ export class GameEngine {
     this.checkDeaths(s, events);
   }
 
+  private applyAdjacentLaneDamage(
+    s: GameState,
+    attacker: UnitInstance,
+    laneIdx: number,
+    events: GameEvent[],
+  ): void {
+    const isP1 = attacker.ownerId === PlayerId.Player;
+    const adjLanes = [laneIdx - 1, laneIdx + 1].filter((idx) => idx >= 0 && idx <= 3);
+    const bonus = attacker.auraModifiers ? attacker.auraModifiers.reduce((acc, m) => acc + m.attackBonus, 0) : 0;
+    const atk = Math.max(0, attacker.attack + bonus);
+    if (atk <= 0) return;
+
+    for (const adjIdx of adjLanes) {
+      const lane = s.lanes[adjIdx];
+      // Target enemy unit in adjacent lane: frontline first, or support if no frontline
+      const enemyTarget = isP1
+        ? (lane.opponentFrontline || lane.opponentSupport)
+        : (lane.playerFrontline || lane.playerSupport);
+
+      if (enemyTarget) {
+        this.emit(events, GameEventType.UNIT_DAMAGED, `"${attacker.name}" dealt ${atk} adjacent lane damage to "${enemyTarget.name}" in Lane ${adjIdx}.`, {
+          attackerInstanceId: attacker.instanceId,
+          targetInstanceId: enemyTarget.instanceId,
+          laneIndex: adjIdx,
+          damage: atk,
+        });
+        this.applyDamageToUnit(s, enemyTarget, atk, events, attacker.isDeadly);
+      }
+    }
+  }
+
   private resolveSingleAttacker(
     s: GameState,
     u: UnitInstance,
@@ -1634,24 +1730,41 @@ export class GameEngine {
     const bonus = u.auraModifiers ? u.auraModifiers.reduce((acc, m) => acc + m.attackBonus, 0) : 0;
     const atk = Math.max(0, u.attack + bonus);
 
+    let dealtTotal = 0;
+    let heroDealt = 0;
+
     if (u.keywords.includes(Keyword.Strikethrough)) {
       if (oppFront) {
-        this.applyDamageToUnit(s, oppFront, atk, events);
+        dealtTotal += this.applyDamageToUnit(s, oppFront, atk, events, u.isDeadly);
       }
       if (oppSupp) {
-        this.applyDamageToUnit(s, oppSupp, atk, events);
+        dealtTotal += this.applyDamageToUnit(s, oppSupp, atk, events, u.isDeadly);
       }
-      this.applyDamageToHero(s, enemyHeroId, atk, u.instanceId, laneIdx, events);
+      heroDealt = this.applyDamageToHero(s, enemyHeroId, atk, u.instanceId, laneIdx, events);
+      dealtTotal += heroDealt;
     } else {
       if (oppFront) {
-        this.applyDamageToUnit(s, oppFront, atk, events);
+        dealtTotal += this.applyDamageToUnit(s, oppFront, atk, events, u.isDeadly);
       } else if (oppSupp) {
-        this.applyDamageToUnit(s, oppSupp, atk, events);
+        dealtTotal += this.applyDamageToUnit(s, oppSupp, atk, events, u.isDeadly);
       } else {
         // Direct to hero
-        this.applyDamageToHero(s, enemyHeroId, atk, u.instanceId, laneIdx, events);
+        heroDealt = this.applyDamageToHero(s, enemyHeroId, atk, u.instanceId, laneIdx, events);
+        dealtTotal += heroDealt;
       }
     }
+
+    if (heroDealt > 0 && u.onHeroDamageEffect?.drawCards) {
+      for (let i = 0; i < u.onHeroDamageEffect.drawCards; i++) {
+        this.drawCard(s, u.ownerId, events);
+      }
+    }
+
+    if (dealtTotal > 0 && u.adjacentLaneDamage) {
+      this.applyAdjacentLaneDamage(s, u, laneIdx, events);
+    }
+
+    this.checkDeaths(s, events);
   }
 
   // ── Hero Damage & Super Block Roll ───────────────────────────
@@ -1863,6 +1976,13 @@ export class GameEngine {
               const enemyId = u.ownerId === PlayerId.Player ? PlayerId.Opponent : PlayerId.Player;
               this.applyDamageToHero(s, enemyId, eff.damage, u.instanceId, item.laneIndex, events);
             }
+
+            // Death Draw (Group A: When unit is destroyed, owner draws card)
+            if (eff.drawCards && eff.drawCards > 0) {
+              for (let i = 0; i < eff.drawCards; i++) {
+                this.drawCard(s, u.ownerId, events);
+              }
+            }
           }
         }
       }
@@ -1944,6 +2064,11 @@ export class GameEngine {
     s.eventLog.push(...events);
     this.state = s;
     return { success: true, state: this.getState(), events };
+  }
+
+  private drawCard(s: GameState, ownerId: PlayerId, events: GameEvent[]): void {
+    const player = ownerId === PlayerId.Player ? s.player : s.opponent;
+    this.drawCardForPlayer(player, events);
   }
 
   private drawCardForPlayer(player: PlayerState, events: GameEvent[]): void {

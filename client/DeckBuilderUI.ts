@@ -5,35 +5,22 @@
 //  Full validation, save, load, rename, duplicate, delete support.
 // ============================================================
 
-import { CardDefinition, CardType, Hero, Keyword } from "../src/types";
+import { CardDefinition, CardType, Hero, Keyword, isSuperpowerCard } from "../src/types";
 import { DeckStorage, SavedDeck, buildCardCatalog, hydrateCardIds } from "./DeckStorage";
 import { cardRepo } from "./CardRepository";
 import { heroRepo } from "./HeroRepository";
 import {
-  SUNFLOWER, PEASHOOTER, WALL_NUT, BONK_CHOY, CHOMPER, TALLNUT,
-  HOMING_THISTLE, ROTOBAGA, AIR_RAID_ZOMBIE,
-  LILY_PAD, SPIKEWEED, SEA_ZOMBIE,
-  BASIC_ZOMBIE, CONEHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE, ZOMBIE_JESTER, BULLY_ZOMBIE,
-  FERTILIZE, LIGHTNING_REED, BRAINS_FOR_BRAINS, WEED_SPRAY,
-  TORCHWOOD, CHEF_ZOMBIE,
-  DOOM_SHROOM, BARREL_OF_DEADBEARDS,
-  SPIKED_HELMET, FERTILIZER_PACK,
-  SOLAR_WINDS, BLACK_HOLE,
+  ALL_STATIC_CARDS,
+  getStaticCardById,
+  SP_SHIELD_OF_LEGEND,
+  SP_HUMAN_SHIELD,
+  SP_SUPPRESS_ANGER,
+  SP_LEAVE_TO_DUST,
 } from "../src/cards";
 import { TRIBE_CSS } from "./visualConstants";
 
 // ─── All collectible fallback cards ───────────────────────────
-const ALL_CARDS: CardDefinition[] = buildCardCatalog([
-  SUNFLOWER, PEASHOOTER, WALL_NUT, BONK_CHOY, CHOMPER, TALLNUT,
-  HOMING_THISTLE, ROTOBAGA, AIR_RAID_ZOMBIE,
-  LILY_PAD, SPIKEWEED, SEA_ZOMBIE,
-  BASIC_ZOMBIE, CONEHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE, ZOMBIE_JESTER, BULLY_ZOMBIE,
-  FERTILIZE, LIGHTNING_REED, BRAINS_FOR_BRAINS, WEED_SPRAY,
-  TORCHWOOD, CHEF_ZOMBIE,
-  DOOM_SHROOM, BARREL_OF_DEADBEARDS,
-  SPIKED_HELMET, FERTILIZER_PACK,
-  SOLAR_WINDS, BLACK_HOLE,
-]);
+const ALL_CARDS: CardDefinition[] = buildCardCatalog(ALL_STATIC_CARDS);
 
 const DECK_SIZE  = 40;
 const MAX_COPIES = 4;
@@ -212,10 +199,10 @@ export class DeckBuilderUI {
         allowedTribes: ["Neutral"],
         tribeSynergies: ["Neutral"],
         superpowerKit: {
-          signatureAbility: SUNFLOWER,
-          coreAbilities: [SUNFLOWER, PEASHOOTER, WALL_NUT],
+          signatureAbility: SP_SHIELD_OF_LEGEND,
+          coreAbilities: [SP_HUMAN_SHIELD, SP_SUPPRESS_ANGER, SP_LEAVE_TO_DUST],
         },
-        superpowers: [SUNFLOWER, PEASHOOTER, WALL_NUT],
+        superpowers: [SP_SHIELD_OF_LEGEND, SP_HUMAN_SHIELD, SP_SUPPRESS_ANGER, SP_LEAVE_TO_DUST],
       };
     }
 
@@ -271,9 +258,7 @@ export class DeckBuilderUI {
     this.onCloseCb = onClose;
 
     // Load CMS cards or fallback, exclude Superpower cards from collectible deck builder
-    const repoCards = cardRepo.getAll().filter((c) => {
-      return c.type !== CardType.HeroAbility && (c.type as any) !== "HeroAbility" && (c.type as any) !== "HERO_ABILITY";
-    });
+    const repoCards = cardRepo.getAll().filter((c) => !isSuperpowerCard(c));
     this.catalog = repoCards.length > 0 ? repoCards : [...ALL_CARDS];
 
     this.savedDecks = DeckStorage.loadByHero(this.hero.id);
@@ -358,11 +343,7 @@ export class DeckBuilderUI {
 
   private isCardAllowedForHero(card: CardDefinition): boolean {
     // Exclude Superpower / Hero Ability cards entirely
-    if (
-      card.type === CardType.HeroAbility ||
-      (card.type as any) === "HeroAbility" ||
-      (card.type as any) === "HERO_ABILITY"
-    ) {
+    if (isSuperpowerCard(card)) {
       return false;
     }
 
@@ -1103,6 +1084,9 @@ export class DeckBuilderUI {
   // ── Card Add / Remove ────────────────────────────────────────
 
   private addCard(id: string): void {
+    const card = this.catalog.find((c) => c.id === id) || cardRepo.getCard(id) || getStaticCardById(id);
+    if (card && isSuperpowerCard(card)) return;
+
     const count = this.activeDeckIds.filter((x) => x === id).length;
     if (count >= MAX_COPIES) return;
     if (this.activeDeckIds.length >= DECK_SIZE) return;

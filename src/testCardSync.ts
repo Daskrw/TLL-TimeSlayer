@@ -4,6 +4,7 @@
 
 import {
   getStaticCardById,
+  CARD_DEATH_DRAW_1,
   HERO_SKY_VANGUARD,
   HERO_ABYSSAL_SORCERER,
   DECK_VANGUARD_40,
@@ -32,9 +33,9 @@ console.log("============================================================\n");
 
 // ── TEST 1: Decoupled Card Instance Mutation Isolation ───────
 console.log("▶ TEST 1: Decoupled Card Instance Mutation Isolation");
-const baseCard = getStaticCardById("CARD_PEASHOOTER")!;
-assert(baseCard !== null, "Found PEASHOOTER in master registry");
-assert(baseCard.keywords.includes(Keyword.Rush), "Base PEASHOOTER has Rush keyword");
+const baseCard = getStaticCardById(CARD_DEATH_DRAW_1.id)!;
+assert(baseCard !== null, "Found CARD_DEATH_DRAW_1 in master registry");
+assert(baseCard.keywords.includes(Keyword.Deathrattle), "Base CARD_DEATH_DRAW_1 has Deathrattle keyword");
 
 const instance1 = createCardInstance(baseCard);
 const instance2 = createCardInstance(baseCard);

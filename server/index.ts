@@ -15,7 +15,7 @@ import { Server, Socket } from "socket.io";
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 import { RoomManager } from "./RoomManager";
 import { ClientToServerEvents, ServerToClientEvents } from "./types";
-import { CardType, PlayerId, TurnPhase } from "../src/types";
+import { CardType, PlayerId, TurnPhase, isSuperpowerCard } from "../src/types";
 import { masterRegistry } from "./MasterRegistry";
 import {
   AVAILABLE_HEROES,
@@ -645,6 +645,19 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents>)
     }
     if (!actualDeck || actualDeck.length === 0) {
       actualDeck = role === "p1" ? [...DECK_VANGUARD_40] : [...DECK_ABYSSAL_40];
+    }
+
+    // Reject deck if it contains any Superpower cards
+    const superpowerCard = actualDeck.find((c) => isSuperpowerCard(c));
+    if (superpowerCard) {
+      console.warn(`[SyncGate] Socket ${socket.id} submitted deck containing Superpower card "${superpowerCard.name}" (${superpowerCard.id}). Rejecting loadout.`);
+      const errorMsg = `Superpower cards cannot be included in decks: "${superpowerCard.name}".`;
+      socket.emit("action_rejected", { reason: errorMsg });
+      socket.emit("ACTION_REJECTED" as any, { reason: errorMsg });
+      return callback?.({
+        success: false,
+        error: errorMsg,
+      });
     }
 
     // Ensure all cards in deck have sanitized numeric costs

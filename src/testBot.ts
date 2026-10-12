@@ -5,25 +5,176 @@
 
 import { GameEngine } from "./engine";
 import { botDecideAction, botRunPhase, botInspectScores } from "./bot";
-import { PlayerId } from "./types";
+import { CardType, Keyword, CardDefinition, PlayerId } from "./types";
 import {
   SAMPLE_PLANT_DECK,
   SAMPLE_ZOMBIE_DECK,
-  // Hand-crafted test cards
-  SUNFLOWER,
-  PEASHOOTER,
-  BONK_CHOY,
-  CHOMPER,
-  HOMING_THISTLE,
-  ROTOBAGA,
-  SEA_ZOMBIE,
-  CONEHEAD_ZOMBIE,
-  BUCKETHEAD_ZOMBIE,
-  BULLY_ZOMBIE,
-  AIR_RAID_ZOMBIE,
-  LIGHTNING_REED,
-  BRAINS_FOR_BRAINS,
 } from "./cards";
+
+// Local test fixtures for bot behavior testing
+const TEST_CHOMPER: CardDefinition = {
+  id: "test_chomper",
+  name: "Chomper",
+  cost: 3,
+  attack: 4,
+  hp: 2,
+  type: CardType.Unit,
+  tribe: "พืช",
+  tribes: ["พืช"],
+  keywords: [Keyword.Piercing],
+};
+
+const TEST_CONEHEAD: CardDefinition = {
+  id: "test_conehead",
+  name: "Conehead Zombie",
+  cost: 2,
+  attack: 2,
+  hp: 3,
+  type: CardType.Unit,
+  tribe: "ซอมบี้",
+  tribes: ["ซอมบี้"],
+  keywords: [Keyword.Armored],
+};
+
+const TEST_BUCKETHEAD: CardDefinition = {
+  id: "test_buckethead",
+  name: "Buckethead Zombie",
+  cost: 3,
+  attack: 3,
+  hp: 4,
+  type: CardType.Unit,
+  tribe: "ซอมบี้",
+  tribes: ["ซอมบี้"],
+  keywords: [Keyword.Armored],
+};
+
+const TEST_BULLY: CardDefinition = {
+  id: "test_bully",
+  name: "Bully Zombie",
+  cost: 3,
+  attack: 3,
+  hp: 3,
+  type: CardType.Unit,
+  tribe: "ซอมบี้",
+  tribes: ["ซอมบี้"],
+  keywords: [],
+};
+
+const TEST_AIR_RAID: CardDefinition = {
+  id: "test_air_raid",
+  name: "Air Raid Zombie",
+  cost: 4,
+  attack: 3,
+  hp: 3,
+  type: CardType.Unit,
+  tribe: "ซอมบี้",
+  tribes: ["ซอมบี้"],
+  keywords: [Keyword.Flying],
+};
+
+const TEST_SUNFLOWER: CardDefinition = {
+  id: "test_sunflower",
+  name: "Sunflower",
+  cost: 1,
+  attack: 0,
+  hp: 1,
+  type: CardType.Unit,
+  tribe: "พืช",
+  tribes: ["พืช"],
+  keywords: [],
+};
+
+const TEST_PEASHOOTER: CardDefinition = {
+  id: "test_peashooter",
+  name: "Peashooter",
+  cost: 1,
+  attack: 1,
+  hp: 2,
+  type: CardType.Unit,
+  tribe: "พืช",
+  tribes: ["พืช"],
+  keywords: [],
+};
+
+const TEST_BONK_CHOY: CardDefinition = {
+  id: "test_bonk_choy",
+  name: "Bonk Choy",
+  cost: 2,
+  attack: 2,
+  hp: 2,
+  type: CardType.Unit,
+  tribe: "พืช",
+  tribes: ["พืช"],
+  keywords: [],
+};
+
+const TEST_HOMING_THISTLE: CardDefinition = {
+  id: "test_homing_thistle",
+  name: "Homing Thistle",
+  cost: 3,
+  attack: 3,
+  hp: 1,
+  type: CardType.Unit,
+  tribe: "พืช",
+  tribes: ["พืช"],
+  keywords: [],
+};
+
+const TEST_ROTOBAGA: CardDefinition = {
+  id: "test_rotobaga",
+  name: "Rotobaga",
+  cost: 4,
+  attack: 2,
+  hp: 1,
+  type: CardType.Unit,
+  tribe: "พืช",
+  tribes: ["พืช"],
+  keywords: [Keyword.Flying],
+};
+
+const TEST_SEA_ZOMBIE: CardDefinition = {
+  id: "test_sea_zombie",
+  name: "Sea Zombie",
+  cost: 2,
+  attack: 2,
+  hp: 2,
+  type: CardType.Unit,
+  tribe: "ซอมบี้",
+  tribes: ["ซอมบี้"],
+  keywords: [Keyword.Amphibious],
+};
+
+const TEST_LIGHTNING_REED: CardDefinition = {
+  id: "test_lightning_reed",
+  name: "Lightning Reed",
+  cost: 3,
+  attack: 0,
+  hp: 0,
+  type: CardType.Spell,
+  spellEffect: {
+    target: "UNIT",
+    damage: 3,
+  },
+  tribe: "พืช",
+  tribes: ["พืช"],
+  keywords: [],
+};
+
+const TEST_BRAINS_FOR_BRAINS: CardDefinition = {
+  id: "test_brains_for_brains",
+  name: "Brains for Brains",
+  cost: 2,
+  attack: 0,
+  hp: 0,
+  type: CardType.Spell,
+  spellEffect: {
+    target: "ALL_UNITS",
+    drawCards: 2,
+  },
+  tribe: "ซอมบี้",
+  tribes: ["ซอมบี้"],
+  keywords: [],
+};
 
 // ─── Helpers ──────────────────────────────────────────────────
 function makeSeedRng(seed: number): () => number {
@@ -92,17 +243,17 @@ header("SCENARIO 1 — Counter high-threat Chomper in Lane 1");
   // Manually place a threatening Chomper (Piercing, 4/2) for Player in Lane 1
   state.lanes[1].playerUnit = {
     instanceId: "test_chomper",
-    cardId: CHOMPER.id,
+    cardId: TEST_CHOMPER.id,
     ownerId: PlayerId.Player,
     laneIndex: 1,
-    name: CHOMPER.name,
-    baseKeywords: [...CHOMPER.keywords],
-    keywords: [...CHOMPER.keywords],
-    tribe: CHOMPER.tribe || "เป็นกลาง",
-    tribes: [CHOMPER.tribe || "เป็นกลาง"],
-    attack: CHOMPER.attack,
-    maxHp: CHOMPER.hp,
-    currentHp: CHOMPER.hp,
+    name: TEST_CHOMPER.name,
+    baseKeywords: [...TEST_CHOMPER.keywords],
+    keywords: [...TEST_CHOMPER.keywords],
+    tribe: TEST_CHOMPER.tribe || "เป็นกลาง",
+    tribes: [TEST_CHOMPER.tribe || "เป็นกลาง"],
+    attack: TEST_CHOMPER.attack,
+    maxHp: TEST_CHOMPER.hp,
+    currentHp: TEST_CHOMPER.hp,
     hasAttackedThisTurn: false,
     summonedThisTurn: false,
     isSupport: false,
@@ -114,7 +265,7 @@ header("SCENARIO 1 — Counter high-threat Chomper in Lane 1");
   };
 
   // Bot hand: Conehead (2-cost ground), Buckethead (3-cost ground), Bully (3-cost)
-  state.opponent.hand = [CONEHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE, BULLY_ZOMBIE, AIR_RAID_ZOMBIE];
+  state.opponent.hand = [TEST_CONEHEAD, TEST_BUCKETHEAD, TEST_BULLY, TEST_AIR_RAID];
 
   printBoard(engine, state);
 
@@ -153,7 +304,7 @@ header("SCENARIO 2 — Open lanes: bot goes face-aggressive");
   // Set bot to P1_UNIT_PHASE (Player)
   state.player.currentMana = 4;
   state.player.maxMana     = 4;
-  state.player.hand        = [SUNFLOWER, PEASHOOTER, BONK_CHOY, HOMING_THISTLE, ROTOBAGA];
+  state.player.hand        = [TEST_SUNFLOWER, TEST_PEASHOOTER, TEST_BONK_CHOY, TEST_HOMING_THISTLE, TEST_ROTOBAGA];
 
   printBoard(engine, state);
 
@@ -198,22 +349,22 @@ header("SCENARIO 3 — Spell phase: lethal removal of 2-HP unit");
   state.opponent.currentMana = 3;
   state.opponent.maxMana     = 3;
   // 5 cards in hand → draw is low-value; lethal removal should win
-  state.opponent.hand        = [LIGHTNING_REED, BRAINS_FOR_BRAINS, CONEHEAD_ZOMBIE, CONEHEAD_ZOMBIE, BULLY_ZOMBIE];
+  state.opponent.hand        = [TEST_LIGHTNING_REED, TEST_BRAINS_FOR_BRAINS, TEST_CONEHEAD, TEST_CONEHEAD, TEST_BULLY];
 
   // Place a 2-HP Peashooter for the player in Lane 1
   state.lanes[1].playerUnit = {
     instanceId: "test_pea",
-    cardId: PEASHOOTER.id,
+    cardId: TEST_PEASHOOTER.id,
     ownerId: PlayerId.Player,
     laneIndex: 1,
-    name: PEASHOOTER.name,
-    baseKeywords: [...PEASHOOTER.keywords],
-    keywords: [...PEASHOOTER.keywords],
-    tribe: PEASHOOTER.tribe || "เป็นกลาง",
-    tribes: [PEASHOOTER.tribe || "เป็นกลาง"],
-    attack: PEASHOOTER.attack,
-    maxHp: PEASHOOTER.hp,
-    currentHp: PEASHOOTER.hp,
+    name: TEST_PEASHOOTER.name,
+    baseKeywords: [...TEST_PEASHOOTER.keywords],
+    keywords: [...TEST_PEASHOOTER.keywords],
+    tribe: TEST_PEASHOOTER.tribe || "เป็นกลาง",
+    tribes: [TEST_PEASHOOTER.tribe || "เป็นกลาง"],
+    attack: TEST_PEASHOOTER.attack,
+    maxHp: TEST_PEASHOOTER.hp,
+    currentHp: TEST_PEASHOOTER.hp,
     hasAttackedThisTurn: false,
     summonedThisTurn: false,
     isSupport: false,
@@ -243,7 +394,7 @@ header("SCENARIO 3 — Spell phase: lethal removal of 2-HP unit");
   }
 
   console.assert(
-    decision.kind === "PLAY_SPELL" && decision.card.id === LIGHTNING_REED.id,
+    decision.kind === "PLAY_SPELL" && decision.card.id === TEST_LIGHTNING_REED.id,
     `❌ Expected Lightning Reed lethal removal, got: ${JSON.stringify(decision)}`,
   );
   console.log(`  ✓ Bot chose lethal removal spell`);
@@ -257,7 +408,7 @@ header("SCENARIO 4 — PASS when mana is 0");
 {
   let state = engine.createGame([...SAMPLE_ZOMBIE_DECK], [...SAMPLE_PLANT_DECK]);
   state.opponent.currentMana = 0;
-  state.opponent.hand        = [CONEHEAD_ZOMBIE, BUCKETHEAD_ZOMBIE];
+  state.opponent.hand        = [TEST_CONEHEAD, TEST_BUCKETHEAD];
 
   const adv = engine.advancePhase(state);
   if (!adv.success) throw new Error(adv.error);
@@ -285,7 +436,7 @@ header("SCENARIO 5 — Full bot turn via botRunPhase()");
 
   state.opponent.currentMana = 3;
   state.opponent.maxMana     = 3;
-  state.opponent.hand        = [CONEHEAD_ZOMBIE, BULLY_ZOMBIE, SEA_ZOMBIE, AIR_RAID_ZOMBIE];
+  state.opponent.hand        = [TEST_CONEHEAD, TEST_BULLY, TEST_SEA_ZOMBIE, TEST_AIR_RAID];
 
   printBoard(engine, state);
 
@@ -335,7 +486,7 @@ header("SCENARIO 6 — Bot respects Flying lane restriction");
   state.opponent.currentMana = 4;
   state.opponent.maxMana     = 4;
   // Only flying cards in hand
-  state.opponent.hand        = [AIR_RAID_ZOMBIE];
+  state.opponent.hand        = [TEST_AIR_RAID];
 
   const scores = botInspectScores(state, PlayerId.Opponent);
   console.log("  All lane scores for Air Raid Zombie:");

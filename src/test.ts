@@ -9,14 +9,15 @@ import { PlayerId, TurnPhase } from "./types";
 import {
   SAMPLE_PLANT_DECK,
   SAMPLE_ZOMBIE_DECK,
-  SUNFLOWER,
-  PEASHOOTER,
-  BONK_CHOY,
-  HOMING_THISTLE,
-  BASIC_ZOMBIE,
-  CONEHEAD_ZOMBIE,
-  AIR_RAID_ZOMBIE,
-  SEA_ZOMBIE,
+  CARD_DEATH_DRAW_1,
+  CARD_DEATH_DRAW_2,
+  CARD_DEATH_DRAW_3,
+  CARD_VANILLA_1,
+  CARD_VANILLA_2,
+  CARD_VANILLA_3,
+  CARD_GRANT_DURABILITY,
+  CARD_HERO_DAMAGE_DRAW,
+  CARD_ADJACENT_DAMAGE,
 } from "./cards";
 
 // ─── Seeded deterministic RNG (LCG) ──────────────────────────
@@ -67,26 +68,26 @@ function applyResult(label: string, result: ReturnType<typeof engine.advancePhas
 log("Initial State");
 
 // Inject known cards into hands for deterministic play
-state.player.hand[0]   = SUNFLOWER;      // 1-cost — fits Turn-1 mana
-state.player.hand[1]   = PEASHOOTER;     // 2-cost (will be used Turn 2)
-state.player.hand[2]   = BONK_CHOY;
-state.player.hand[3]   = HOMING_THISTLE;
-state.opponent.hand[0] = BASIC_ZOMBIE;   // 1-cost — fits Turn-1 mana
-state.opponent.hand[1] = CONEHEAD_ZOMBIE;
-state.opponent.hand[2] = AIR_RAID_ZOMBIE;
-state.opponent.hand[3] = SEA_ZOMBIE;
+state.player.hand[0]   = CARD_DEATH_DRAW_1;
+state.player.hand[1]   = CARD_VANILLA_1;
+state.player.hand[2]   = CARD_GRANT_DURABILITY;
+state.player.hand[3]   = CARD_HERO_DAMAGE_DRAW;
+state.opponent.hand[0] = CARD_DEATH_DRAW_2;
+state.opponent.hand[1] = CARD_VANILLA_2;
+state.opponent.hand[2] = CARD_ADJACENT_DAMAGE;
+state.opponent.hand[3] = CARD_DEATH_DRAW_3;
 
 // ── P1 UNIT PHASE ─────────────────────────────────────────────
-console.log("\n>>> P1 plays Sunflower (1 cost) to Lane 1");
-applyResult("P1 play Sunflower Lane 1", engine.playCard(state, PlayerId.Player, "CARD_SUNFLOWER", 1));
+console.log("\n>>> P1 plays Death Draw 1 (1 cost) to Lane 1");
+applyResult("P1 play Death Draw 1 Lane 1", engine.playCard(state, PlayerId.Player, CARD_DEATH_DRAW_1.id, 1));
 
 // Cannot afford a 2nd card this turn (mana exhausted)
 console.log("\n>>> Advance to P2_UNIT_PHASE");
 applyResult("advancePhase → P2_UNIT", engine.advancePhase(state));
 
 // ── P2 UNIT PHASE ─────────────────────────────────────────────
-console.log("\n>>> P2 plays Basic Zombie (1 cost) to Lane 1");
-applyResult("P2 play Basic Zombie Lane 1", engine.playCard(state, PlayerId.Opponent, "CARD_BASIC_ZOMBIE", 1));
+console.log("\n>>> P2 plays Death Draw 2 (1 cost) to Lane 1");
+applyResult("P2 play Death Draw 2 Lane 1", engine.playCard(state, PlayerId.Opponent, CARD_DEATH_DRAW_2.id, 1));
 
 // ── Skip spell phases ──────────────────────────────────────────
 console.log("\n>>> Advance to P1_SPELL_PHASE");
@@ -135,8 +136,8 @@ console.assert(!state.isGameOver, "Game should not be over yet.");
 console.log(`  ✓ Game ongoing`);
 
 // ─── Lane restriction validation ─────────────────────────────
-const badResult = engine.playCard(state, PlayerId.Player, "CARD_HOMING_THISTLE", 1);
-console.assert(!badResult.success, "Should reject Flying unit in ground lane.");
-console.log(`  ✓ Flying unit correctly rejected from ground lane: "${(badResult as any).error}"`);
+const badResult = engine.playCard(state, PlayerId.Player, CARD_DEATH_DRAW_1.id, 0);
+console.assert(!badResult.success, "Should reject non-Flying unit in aerial lane.");
+console.log(`  ✓ Non-Flying unit correctly rejected from aerial lane: "${(badResult as any).error}"`);
 
 console.log("\n✅ Smoke test complete.\n");
