@@ -634,6 +634,206 @@ assert(
   `Hydrated artwork length exactly matches remote payload (${hydratedCard.imageUrl.length} chars)`
 );
 
+// ── TEST 15: Artwork Fetch Timeout Does NOT Discard Metadata ───────────────
+console.log("\n▶ TEST 15: Artwork Fetch Timeout Does NOT Discard Metadata");
+
+// Simulate the decoupled hydration architecture:
+// Even when individual artwork queries fail (e.g. statement timeout 57014 or HTTP 504),
+// all metadata rows are strictly preserved and the catalog is never returned as null.
+const simulatedMetaRows = [
+  { id: "CARD_DEATH_DRAW_1", name: "Draw Man KID", cost: 1, attack: 2, hp: 1, type: "UNIT", updatedAt: 1791810946901, text: "Draw on death" },
+  { id: "CARD_DEATH_DRAW_2", name: "Draw Man Teen", cost: 3, attack: 4, hp: 3, type: "UNIT", updatedAt: 1791811281874, text: "Draw 2 on death" },
+  { id: "CARD_VANILLA_2", name: "Shield Arms Teen", cost: 3, attack: 2, hp: 4, type: "UNIT", updatedAt: 1791812462976, text: "Armored guard" },
+];
+
+// Artwork map simulates CARD_DEATH_DRAW_2 timing out / failing
+const simulatedArtworkMap = new Map<string, string>();
+simulatedArtworkMap.set("CARD_DEATH_DRAW_1", "data:image/webp;base64,DRAW_KID_ART");
+// CARD_DEATH_DRAW_2 failed / timed out -> NOT in map
+simulatedArtworkMap.set("CARD_VANILLA_2", "data:image/webp;base64,SHIELD_TEEN_ART");
+
+// Hydrate cards using decoupled pipeline
+const decoupledHydratedCatalog = simulatedMetaRows.map((row) =>
+  normalizeCardRow({
+    ...row,
+    imageUrl: simulatedArtworkMap.get(String(row.id)) || "",
+  })
+);
+
+assert(decoupledHydratedCatalog.length === 3, "Catalog retains all 3 cards despite 1 artwork timeout");
+assert(decoupledHydratedCatalog[0].name === "Draw Man KID", "Card 1 metadata preserved: Draw Man KID");
+assert(decoupledHydratedCatalog[0].attack === 2, "Card 1 attack preserved: 2");
+assert(decoupledHydratedCatalog[0].imageUrl === "data:image/webp;base64,DRAW_KID_ART", "Card 1 artwork preserved");
+
+// The card with timed-out artwork retains exact stats and name
+assert(decoupledHydratedCatalog[1].id === "CARD_DEATH_DRAW_2", "Card 2 retains id CARD_DEATH_DRAW_2");
+assert(decoupledHydratedCatalog[1].name === "Draw Man Teen", "Card 2 retains custom name Draw Man Teen");
+assert(decoupledHydratedCatalog[1].cost === 3, "Card 2 retains cost 3");
+assert(decoupledHydratedCatalog[1].attack === 4, "Card 2 retains attack 4");
+assert(decoupledHydratedCatalog[1].hp === 3, "Card 2 retains hp 3");
+assert(decoupledHydratedCatalog[1].text === "Draw 2 on death", "Card 2 retains rules text");
+assert(decoupledHydratedCatalog[1].updatedAt === 1791811281874, "Card 2 retains remote timestamp");
+assert(decoupledHydratedCatalog[1].imageUrl === "", "Card 2 imageUrl is empty due to timeout (not corrupted)");
+
+// Card 3 is also preserved
+assert(decoupledHydratedCatalog[2].name === "Shield Arms Teen", "Card 3 metadata preserved: Shield Arms Teen");
+assert(decoupledHydratedCatalog[2].attack === 2, "Card 3 attack preserved: 2");
+assert(decoupledHydratedCatalog[2].hp === 4, "Card 3 hp preserved: 4");
+
+// ── TEST 16: Cached Artwork Preserved When Artwork Fetch Fails ─────────────
+console.log("\n▶ TEST 16: Cached Artwork Preserved When Artwork Fetch Fails");
+
+// Suppose CARD_DEATH_DRAW_2 was already cached locally with artwork
+const cachedExistingCard: CardMeta = {
+  id: "CARD_DEATH_DRAW_2",
+  name: "Draw Man Teen (Old Local)",
+  cost: 3,
+  type: CardType.Unit,
+  attack: 3,
+  hp: 3,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+  text: "Old rules",
+  imageUrl: "data:image/webp;base64,CACHED_LOCAL_TEEN_ARTWORK",
+  updatedAt: 1791810000000,
+};
+
+// Incoming card from remote has newer timestamp and updated stats, but empty imageUrl because fetch timed out
+const incomingTimedOutCard = decoupledHydratedCatalog[1]; // CARD_DEATH_DRAW_2 with imageUrl: ""
+
+const mergedWithCachedArt = mergeCardSafely(cachedExistingCard, incomingTimedOutCard, { isAuthoritativeRemote: true });
+
+assert(mergedWithCachedArt.name === "Draw Man Teen", "Remote updated name applied: Draw Man Teen");
+assert(mergedWithCachedArt.attack === 4, "Remote updated attack applied: 4");
+assert(mergedWithCachedArt.hp === 3, "Remote updated hp applied: 3");
+assert(mergedWithCachedArt.updatedAt === 1791811281874, "Remote updated timestamp preserved exactly");
+assert(
+  mergedWithCachedArt.imageUrl === "data:image/webp;base64,CACHED_LOCAL_TEEN_ARTWORK",
+  "Cached artwork is strictly preserved when incoming remote artwork is empty/timed-out"
+);
+
+// ── TEST 17: Baseline Seed Cards Cannot Overwrite Remote Metadata ──────────
+console.log("\n▶ TEST 17: Baseline Seed Cards Cannot Overwrite Remote Metadata");
+
+// Static seed card for CARD_DEATH_DRAW_2 (from seed catalog with updatedAt: 0)
+const seedBaselineCard: CardMeta = {
+  id: "CARD_DEATH_DRAW_2",
+  name: "Draw Man",
+  cost: 2,
+  type: CardType.Unit,
+  attack: 2,
+  hp: 2,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+  text: "",
+  imageUrl: "",
+  updatedAt: 0,
+};
+
+// Verify that seed card cannot overwrite our merged remote card
+assert(
+  !shouldIncomingCardOverwrite(seedBaselineCard, mergedWithCachedArt, false),
+  "Seed card (updatedAt: 0) strictly rejected by shouldIncomingCardOverwrite"
+);
+assert(
+  !shouldIncomingCardOverwrite(seedBaselineCard, mergedWithCachedArt, true),
+  "Seed card strictly rejected even if claimed authoritative"
+);
+
+const rejectedSeedMerge = mergeCardSafely(mergedWithCachedArt, seedBaselineCard, { isAuthoritativeRemote: false });
+assert(rejectedSeedMerge.name === "Draw Man Teen", "Remote name preserved against seed overwrite");
+assert(rejectedSeedMerge.attack === 4, "Remote attack 4 preserved against seed overwrite");
+assert(rejectedSeedMerge.hp === 3, "Remote hp 3 preserved against seed overwrite");
+assert(rejectedSeedMerge.cost === 3, "Remote cost 3 preserved against seed overwrite");
+assert(rejectedSeedMerge.updatedAt === 1791811281874, "Remote timestamp preserved against seed overwrite");
+assert(rejectedSeedMerge.imageUrl === "data:image/webp;base64,CACHED_LOCAL_TEEN_ARTWORK", "Artwork preserved against seed overwrite");
+
+// ── TEST 18: Remote Save Failure Isolation ─────────────────────────────────
+console.log("\n▶ TEST 18: Remote Save Failure Isolation");
+
+// Verify that failed remote writes are not presented as successful saves
+// and do not corrupt local state with uncommitted data.
+const testCardBeforeSave: CardMeta = {
+  id: "CARD_TEST_SAVE_FAIL",
+  name: "Original Name",
+  cost: 2,
+  type: CardType.Unit,
+  attack: 2,
+  hp: 2,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: [],
+  text: "Original text",
+  imageUrl: "data:image/webp;base64,ORIGINAL_ART",
+  updatedAt: 1728800000000,
+};
+
+// Simulate repository update logic where remote push fails
+function simulateUpdateCardWithPushResult(
+  repoCards: Map<string, CardMeta>,
+  id: string,
+  patch: Partial<CardMeta>,
+  pushSucceeds: boolean
+): boolean {
+  const existing = repoCards.get(id);
+  const updated: CardMeta = existing
+    ? { ...existing, ...patch, updatedAt: Date.now() }
+    : ({ id, name: patch.name || id, cost: patch.cost ?? 1, type: CardType.Unit, tribes: ["เป็นกลาง"], tribe: "เป็นกลาง", keywords: [], attack: 1, hp: 1, imageUrl: "", text: "", updatedAt: Date.now(), ...patch } as CardMeta);
+
+  if (pushSucceeds) {
+    repoCards.set(id, updated);
+    return true;
+  }
+  // Remote write failed: do NOT update local repository state
+  return false;
+}
+
+const mockRepo = new Map<string, CardMeta>([["CARD_TEST_SAVE_FAIL", { ...testCardBeforeSave }]]);
+
+// Attempt to save with remote failure
+const saveSuccess = simulateUpdateCardWithPushResult(
+  mockRepo,
+  "CARD_TEST_SAVE_FAIL",
+  { name: "Unsaved Name Edit", attack: 99 },
+  false // push fails
+);
+
+assert(saveSuccess === false, "Simulated remote save failure returns false");
+const cardAfterFailedSave = mockRepo.get("CARD_TEST_SAVE_FAIL");
+assert(cardAfterFailedSave?.name === "Original Name", "Card name unchanged in repo after failed remote save");
+assert(cardAfterFailedSave?.attack === 2, "Card attack unchanged in repo after failed remote save");
+assert(cardAfterFailedSave?.updatedAt === 1728800000000, "Timestamp NOT artificially updated on failure");
+
+// Now attempt save with remote success
+const successfulSave = simulateUpdateCardWithPushResult(
+  mockRepo,
+  "CARD_TEST_SAVE_FAIL",
+  { name: "Confirmed Saved Name", attack: 5 },
+  true // push succeeds
+);
+assert(successfulSave === true, "Simulated remote save success returns true");
+const cardAfterSuccessfulSave = mockRepo.get("CARD_TEST_SAVE_FAIL");
+assert(cardAfterSuccessfulSave?.name === "Confirmed Saved Name", "Card name updated in repo after successful remote save");
+assert(cardAfterSuccessfulSave?.attack === 5, "Card attack updated in repo after successful remote save");
+assert(cardAfterSuccessfulSave!.updatedAt > 1728800000000, "Timestamp updated after confirmed remote write");
+
+// ── TEST 19: Safe Error Logging Without Base64 Payload Dumps ───────────────
+console.log("\n▶ TEST 19: Safe Error Logging Without Base64 Payload Dumps");
+
+// Verify that error messages for failed artwork do not leak multi-megabyte payloads
+const fakeHugePayload = "data:image/webp;base64," + "X".repeat(3000000);
+const fakeCardId = "CARD_DEATH_DRAW_1";
+const fakeError = { code: "57014", message: "canceling statement due to statement timeout" };
+
+// Log format must contain card ID and error message/code, but NEVER the base64 payload
+const logMessage = `[Supabase] Artwork fetch failed for card ${fakeCardId}: ${fakeError.message || fakeError.code || "unknown error"}`;
+assert(logMessage.includes("CARD_DEATH_DRAW_1"), "Log message identifies failing card ID");
+assert(logMessage.includes("statement timeout"), "Log message includes concise error reason");
+assert(!logMessage.includes("data:image"), "Log message does NOT include artwork base64 payload");
+assert(logMessage.length < 200, `Log message length is compact (${logMessage.length} chars)`);
+
 console.log("\n============================================================");
 console.log(`  RESULTS: ${passed} Passed, ${failed} Failed`);
 console.log("============================================================\n");

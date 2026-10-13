@@ -186,74 +186,78 @@ export async function fetchCardsFromSupabase(
       return metaRows.map((row) => normalizeCardRow({ ...row, imageUrl: "" }));
     }
 
-    // 3. Hydrate images in bounded batches so PostgREST statement execution never times out
+    // 3. Hydrate images in bounded batches so PostgREST statement execution never times out.
+    // Artwork loading is completely decoupled from metadata loading:
+    // If an artwork request times out or errors, the card metadata is strictly preserved,
+    // and the failed card's artwork falls back to empty or cached artwork.
     const imageMap = new Map<string, string>();
     const ids: string[] = metaRows.map((r) => String(r.id || ""));
 
-    for (let i = 0; i < ids.length; i += batchSize) {
-      const chunkIds = ids.slice(i, i + batchSize);
-      let imgRes: { data: any[] | null; error: any } = await supabase
-        .from("cards")
-        .select("id, imageUrl")
-        .in("id", chunkIds);
-
-      // Fallback for snake_case image_url column
-      if (imgRes.error && (imgRes.error.message?.includes("column") || imgRes.error.code === "PGRST204")) {
-        imgRes = await supabase
+    try {
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const chunkIds = ids.slice(i, i + batchSize);
+        let imgRes: { data: any[] | null; error: any } = await supabase
           .from("cards")
-          .select("id, image_url")
+          .select("id, imageUrl")
           .in("id", chunkIds);
-      }
 
-      if (imgRes.error) {
-        // If a multi-card batch failed (e.g. statement timeout 57014 from accumulated large base64 images),
-        // retry fetching each card individually before declaring failure.
-        if (chunkIds.length > 1) {
-          console.warn(`[Supabase] Batch timed out for [${chunkIds.join(", ")}]. Retrying individual cards...`);
-          let singleFail = false;
-          for (const singleId of chunkIds) {
-            let singleRes: { data: any[] | null; error: any } = await supabase
-              .from("cards")
-              .select("id, imageUrl")
-              .eq("id", singleId);
-            if (singleRes.error && (singleRes.error.message?.includes("column") || singleRes.error.code === "PGRST204")) {
-              singleRes = await supabase.from("cards").select("id, image_url").eq("id", singleId);
+        // Fallback for snake_case image_url column
+        if (imgRes.error && (imgRes.error.message?.includes("column") || imgRes.error.code === "PGRST204")) {
+          imgRes = await supabase
+            .from("cards")
+            .select("id, image_url")
+            .in("id", chunkIds);
+        }
+
+        if (imgRes.error) {
+          // If a multi-card batch failed (e.g. statement timeout 57014 from accumulated large base64 images),
+          // retry fetching each card individually so individual successes are captured.
+          if (chunkIds.length > 1) {
+            console.warn(`[Supabase] Batch timed out for [${chunkIds.join(", ")}]. Retrying individual cards...`);
+            for (const singleId of chunkIds) {
+              try {
+                let singleRes: { data: any[] | null; error: any } = await supabase
+                  .from("cards")
+                  .select("id, imageUrl")
+                  .eq("id", singleId);
+                if (singleRes.error && (singleRes.error.message?.includes("column") || singleRes.error.code === "PGRST204")) {
+                  singleRes = await supabase.from("cards").select("id, image_url").eq("id", singleId);
+                }
+                if (singleRes.error) {
+                  // Log failure per card without logging full base64 data
+                  console.warn(`[Supabase] Artwork fetch failed for card ${singleId}: ${singleRes.error.message || singleRes.error.code || "unknown error"}`);
+                  continue;
+                }
+                const singleRow = singleRes.data?.[0];
+                if (singleRow) {
+                  const img = singleRow.imageUrl ?? singleRow.image_url ?? "";
+                  if (img) imageMap.set(singleId, String(img));
+                }
+              } catch (singleErr: any) {
+                console.warn(`[Supabase] Artwork fetch exception for card ${singleId}: ${singleErr?.message || "network error"}`);
+              }
             }
-            if (singleRes.error) {
-              console.error(`[Supabase] Error fetching artwork for card ${singleId}:`, singleRes.error.message);
-              singleFail = true;
-              break;
-            }
-            const singleRow = singleRes.data?.[0];
-            if (singleRow) {
-              const img = singleRow.imageUrl ?? singleRow.image_url ?? "";
-              if (img) imageMap.set(singleId, String(img));
-            }
-          }
-          if (singleFail) {
-            // Requirement: Surface batch failure safely; do not treat partial fetch as complete catalog.
-            return null;
+          } else {
+            const singleId = chunkIds[0];
+            // Single card artwork fetch failed / timed out. Log without base64 and continue.
+            console.warn(`[Supabase] Artwork fetch failed for card ${singleId}: ${imgRes.error.message || imgRes.error.code || "unknown error"}`);
           }
         } else {
-          console.error(
-            `[Supabase] Error fetching card artwork for ${chunkIds[0]}:`,
-            imgRes.error.message,
-            imgRes.error
-          );
-          return null;
-        }
-      } else {
-        for (const row of imgRes.data || []) {
-          if (row && typeof row === "object" && "id" in row) {
-            const r = row as Record<string, any>;
-            const img = r.imageUrl ?? r.image_url ?? "";
-            if (img) imageMap.set(String(r.id), String(img));
+          for (const row of imgRes.data || []) {
+            if (row && typeof row === "object" && "id" in row) {
+              const r = row as Record<string, any>;
+              const img = r.imageUrl ?? r.image_url ?? "";
+              if (img) imageMap.set(String(r.id), String(img));
+            }
           }
         }
       }
+    } catch (artLoopErr: any) {
+      console.warn(`[Supabase] Non-fatal artwork hydration error: ${artLoopErr?.message || "network error"}`);
     }
 
-    // 4. Combine metadata and artwork into normalized CardMeta records
+    // 4. Combine metadata and artwork into normalized CardMeta records.
+    // If an artwork request fails, valid remote metadata is retained and never discarded.
     return metaRows.map((row) =>
       normalizeCardRow({
         ...row,

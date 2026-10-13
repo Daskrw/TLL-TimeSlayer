@@ -171,6 +171,22 @@ export async function loadArtworkFromIDB(): Promise<Map<string, string>> {
   }
 }
 
+export async function getArtworkFromIDB(id: string): Promise<string | null> {
+  if (!id || typeof window === "undefined" || !window.indexedDB) return null;
+  try {
+    const db = await openArtworkDB();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(id);
+      req.onsuccess = () => resolve((req.result as string) || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Conflict Resolution & Sync Hardening Rules
 // ─────────────────────────────────────────────────────────────
@@ -400,6 +416,12 @@ export class CardRepository {
         for (const row of supabaseCards) {
           const existing = this.cards.get(row.id);
           const merged = mergeCardSafely(existing, row, { isAuthoritativeRemote: true });
+          if (!merged.imageUrl || merged.imageUrl.trim() === "") {
+            const cached = await getArtworkFromIDB(row.id);
+            if (cached) {
+              merged.imageUrl = cached;
+            }
+          }
           this.cards.set(row.id, merged);
           if (row.imageUrl && !isCompactImageUrl(row.imageUrl)) {
             saveArtworkToIDB(row.id, row.imageUrl);
@@ -551,25 +573,29 @@ export class CardRepository {
           ...patch,
         } as CardMeta);
 
-    this.cards.set(id, updated);
-    this.persistLocalOverrides();
-    if (updated.imageUrl && !isCompactImageUrl(updated.imageUrl)) {
-      saveArtworkToIDB(id, updated.imageUrl);
-    }
     const ok = await this.pushRemote(updated);
-    this.notify();
+    if (ok) {
+      this.cards.set(id, updated);
+      this.persistLocalOverrides();
+      if (updated.imageUrl && !isCompactImageUrl(updated.imageUrl)) {
+        saveArtworkToIDB(id, updated.imageUrl);
+      }
+      this.notify();
+    }
     return ok;
   }
 
   public async upsertCard(meta: CardMeta): Promise<boolean> {
-    meta.updatedAt = Date.now();
-    this.cards.set(meta.id, meta);
-    this.persistLocalOverrides();
-    if (meta.imageUrl && !isCompactImageUrl(meta.imageUrl)) {
-      saveArtworkToIDB(meta.id, meta.imageUrl);
+    const updated: CardMeta = { ...meta, updatedAt: Date.now() };
+    const ok = await this.pushRemote(updated);
+    if (ok) {
+      this.cards.set(meta.id, updated);
+      this.persistLocalOverrides();
+      if (updated.imageUrl && !isCompactImageUrl(updated.imageUrl)) {
+        saveArtworkToIDB(meta.id, updated.imageUrl);
+      }
+      this.notify();
     }
-    const ok = await this.pushRemote(meta);
-    this.notify();
     return ok;
   }
 

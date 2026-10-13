@@ -1176,6 +1176,7 @@ export class AdminCardView {
     const attack = parseInt((this.cardModal.querySelector("#adm-field-attack") as HTMLInputElement).value, 10);
     const hp = parseInt((this.cardModal.querySelector("#adm-field-hp") as HTMLInputElement).value, 10);
     const rawInputUrl = (this.cardModal.querySelector("#adm-field-imageUrl") as HTMLInputElement).value.trim();
+    const text = (this.cardModal.querySelector("#adm-field-text") as HTMLTextAreaElement)?.value?.trim() ?? "";
     const imageUrl = this.pendingCardImg !== null
       ? this.pendingCardImg
       : (rawInputUrl || this.editingCard.imageUrl || "");
@@ -1200,7 +1201,7 @@ export class AdminCardView {
       tribe: tribes[0] || "เป็นกลาง",
       keywords,
       imageUrl,
-      ...(text ? { text } : {}),
+      text,
     };
 
     const saveBtn = this.cardModal.querySelector("#adm-btn-save-card") as HTMLButtonElement;
@@ -1211,16 +1212,16 @@ export class AdminCardView {
 
     try {
       const ok = await cardRepo.updateCard(this.editingCard.id, patch);
-      this.closeCardModal();
-      this.render();
       if (ok) {
+        this.closeCardModal();
+        this.render();
         this.showToast(`✅ "${name || this.editingCard.name}" saved & published to Supabase!`);
       } else {
-        this.showToast(`⚠️ "${name || this.editingCard.name}" saved locally, but failed to write to Supabase (check RLS/network).`);
+        this.showToast(`❌ Remote save failed: could not publish "${name || this.editingCard.name}" to Supabase. Edits preserved — please retry.`);
       }
     } catch (err: any) {
       console.error("[AdminCardView] saveCard error:", err);
-      this.showToast(`⚠️ Error saving card: ${err?.message || err}`);
+      this.showToast(`❌ Error saving card: ${err?.message || err}. Edits preserved — please retry.`);
     } finally {
       if (saveBtn) {
         saveBtn.disabled = false;
