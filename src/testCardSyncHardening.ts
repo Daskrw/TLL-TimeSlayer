@@ -834,6 +834,93 @@ assert(logMessage.includes("statement timeout"), "Log message includes concise e
 assert(!logMessage.includes("data:image"), "Log message does NOT include artwork base64 payload");
 assert(logMessage.length < 200, `Log message length is compact (${logMessage.length} chars)`);
 
+// ── TEST 20: Stale LocalStorage Seed Record With Higher Timestamp Does NOT Block Yesterday's Supabase Record ──
+console.log("\n▶ TEST 20: Stale LocalStorage Seed Overwrite (Authoritative Supersedes Stale Cache)");
+
+// Simulate the exact bug:
+// Client had local storage override written today (Date.now() = 1791885000000) with default seed name & 1/1/1 stats
+const staleLocalCacheCard: CardMeta = {
+  id: "CARD_DEATH_DRAW_1",
+  name: "Soul Harvester",
+  cost: 1,
+  type: CardType.Unit,
+  attack: 1,
+  hp: 1,
+  tribes: ["ปัญญา", "เป็นกลาง"],
+  tribe: "ปัญญา",
+  keywords: [Keyword.Deathrattle],
+  text: "Ordinary seed text",
+  imageUrl: "",
+  updatedAt: 1791885000000, // Today
+};
+
+// Authoritative Supabase card saved yesterday
+const remoteSupabaseCard: CardMeta = {
+  id: "CARD_DEATH_DRAW_1",
+  name: "Draw Man KID",
+  cost: 1,
+  type: CardType.Unit,
+  attack: 2,
+  hp: 1,
+  tribes: ["ปัญญา", "เป็นกลาง"],
+  tribe: "ปัญญา",
+  keywords: [Keyword.Deathrattle, Keyword.Support],
+  text: "เมื่อยูนิตนี้ถูกทำลาย คุณจั่วการ์ด 1 ใบ",
+  imageUrl: "data:image/webp;base64,DRAW_KID_ART",
+  updatedAt: 1791810946901, // Yesterday (older timestamp than stale local cache!)
+};
+
+// shouldIncomingCardOverwrite MUST return true because remote is authoritative and existing is merely seed
+assert(
+  shouldIncomingCardOverwrite(remoteSupabaseCard, staleLocalCacheCard, true),
+  "Authoritative Supabase record overwrites stale local cache even if cache has higher timestamp"
+);
+
+const restoredOverStaleCard = mergeCardSafely(staleLocalCacheCard, remoteSupabaseCard, { isAuthoritativeRemote: true });
+assert(restoredOverStaleCard.name === "Draw Man KID", `Restored card name is Draw Man KID (got ${restoredOverStaleCard.name})`);
+assert(restoredOverStaleCard.attack === 2, `Restored card attack is 2 (got ${restoredOverStaleCard.attack})`);
+assert(restoredOverStaleCard.hp === 1, `Restored card hp is 1 (got ${restoredOverStaleCard.hp})`);
+assert(restoredOverStaleCard.imageUrl === "data:image/webp;base64,DRAW_KID_ART", "Restored card artwork is preserved");
+assert(restoredOverStaleCard.updatedAt === 1791810946901, "Restored card timestamp matches Supabase exactly");
+
+// Also test backend /api/catalog fallback:
+assert(
+  shouldIncomingCardOverwrite(remoteSupabaseCard, staleLocalCacheCard, true),
+  "Authoritative /api/catalog card overwrites stale local cache"
+);
+
+// ── TEST 21: Remote Card With Attack 0 Remains Exactly 0 (e.g. Sheild Arms KID) ──
+console.log("\n▶ TEST 21: Remote Card with Attack 0 Preserved (Sheild Arms KID)");
+
+const rawShieldArmsRow = {
+  id: "CARD_VANILLA_1",
+  name: "Sheild Arms KID",
+  cost: 1,
+  type: "UNIT",
+  attack: 0,
+  hp: 3,
+  tribes: ["เป็นกลาง"],
+  tribe: "เป็นกลาง",
+  keywords: ["สนับสนุน", "ทนทาน"],
+  text: "ยูนิตพื้นฐานทั่วไป ไม่มีอบิลิตี้",
+  imageUrl: "",
+  updatedAt: 1791812212374,
+};
+
+const normalizedShieldArms = normalizeCardRow(rawShieldArmsRow);
+assert(normalizedShieldArms.attack === 0, `Attack 0 preserved after normalizeCardRow (got ${normalizedShieldArms.attack})`);
+assert(normalizedShieldArms.hp === 3, `HP 3 preserved after normalizeCardRow (got ${normalizedShieldArms.hp})`);
+assert(normalizedShieldArms.cost === 1, `Cost 1 preserved after normalizeCardRow (got ${normalizedShieldArms.cost})`);
+
+const mergedShieldArms = mergeCardSafely(
+  { ...staleLocalCacheCard, id: "CARD_VANILLA_1", name: "Recruit Scout", attack: 1, hp: 1 },
+  normalizedShieldArms,
+  { isAuthoritativeRemote: true }
+);
+assert(mergedShieldArms.name === "Sheild Arms KID", "Sheild Arms KID name preserved after merge");
+assert(mergedShieldArms.attack === 0, `Attack 0 strictly preserved against default 1 (got ${mergedShieldArms.attack})`);
+assert(mergedShieldArms.hp === 3, `HP 3 strictly preserved (got ${mergedShieldArms.hp})`);
+
 console.log("\n============================================================");
 console.log(`  RESULTS: ${passed} Passed, ${failed} Failed`);
 console.log("============================================================\n");
@@ -841,3 +928,4 @@ console.log("============================================================\n");
 if (failed > 0) {
   process.exit(1);
 }
+process.exit(0);

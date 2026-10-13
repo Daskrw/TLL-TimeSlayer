@@ -192,12 +192,30 @@ export async function getArtworkFromIDB(id: string): Promise<string | null> {
 // ─────────────────────────────────────────────────────────────
 
 /**
+ * Checks if a card is an unedited baseline seed card (either updatedAt === 0 or
+ * its name, cost, attack, and HP match the static baseline seed card exactly).
+ */
+export function isDefaultSeedCard(card: CardMeta | undefined): boolean {
+  if (!card) return true;
+  if (!card.updatedAt || card.updatedAt === 0) return true;
+  const staticDef = StaticCards.getStaticCardById(card.id);
+  if (!staticDef) return false;
+  return (
+    card.name === staticDef.name &&
+    card.cost === staticDef.cost &&
+    (card.attack ?? 0) === (staticDef.attack ?? 0) &&
+    (card.hp ?? 0) === (staticDef.hp ?? 0)
+  );
+}
+
+/**
  * Evaluates whether an incoming card record should overwrite an existing record.
  * Rules:
- *  1. A seed/default record with updatedAt === 0 CANNOT overwrite an existing record with updatedAt > 0.
- *  2. Fallback seed data must not overwrite valid edited stats, effects, names, or fields.
- *  3. LWW timestamp comparison: if incoming is older than existing, reject.
- *  4. Fallback data (isAuthoritativeRemote === false) cannot overwrite existing records with equal or newer timestamps.
+ *  1. A seed/default record with updatedAt === 0 CANNOT overwrite an edited record with updatedAt > 0.
+ *  2. If existing is merely an unedited default seed card, any valid incoming record with updatedAt > 0 must overwrite it.
+ *  3. Authoritative remote data (from Supabase Cloud or Backend Master Registry with updatedAt > 0) ALWAYS supersedes client offline localStorage cache.
+ *  4. Fallback data (isAuthoritativeRemote === false) cannot overwrite existing records with updatedAt > 0.
+ *  5. LWW timestamp comparison: between two customized records of equal authority, the newer record wins.
  */
 export function shouldIncomingCardOverwrite(
   incoming: CardMeta,
@@ -214,8 +232,19 @@ export function shouldIncomingCardOverwrite(
     return false;
   }
 
-  // Rule 2: If incoming is fallback data (e.g. /api/catalog fallback or static seed):
-  // Never overwrite an existing record that has updatedAt > 0 or has local edits
+  // Rule 2: If existing is merely a default seed card (regardless of its timestamp),
+  // any valid incoming record with updatedAt > 0 must overwrite it.
+  if (isDefaultSeedCard(existing) && incomingUpdated > 0) {
+    return true;
+  }
+
+  // Rule 3: LWW timestamp comparison between customized records: an older incoming record cannot overwrite a newer existing customized record
+  if (incomingUpdated > 0 && existingUpdated > 0 && incomingUpdated < existingUpdated) {
+    return false;
+  }
+
+  // Rule 4: If incoming is fallback data (isAuthoritativeRemote === false):
+  // Never overwrite an existing record that has updatedAt > 0
   if (!isAuthoritativeRemote) {
     if (existingUpdated > 0) {
       return false;
@@ -225,9 +254,10 @@ export function shouldIncomingCardOverwrite(
     }
   }
 
-  // Rule 3: LWW timestamp comparison
-  if (incomingUpdated > 0 && existingUpdated > 0 && incomingUpdated < existingUpdated) {
-    return false;
+  // Rule 5: Authoritative remote data (from Supabase Cloud or Backend Master Registry with updatedAt > 0)
+  // supersedes client offline cache.
+  if (isAuthoritativeRemote && incomingUpdated > 0) {
+    return true;
   }
 
   return true;
@@ -390,6 +420,23 @@ export class CardRepository {
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return;
       const overrides = JSON.parse(raw) as Record<string, Partial<CardMeta>>;
+      let modified = false;
+      for (const [id, patch] of Object.entries(overrides)) {
+        const staticDef = StaticCards.getStaticCardById(id);
+        if (
+          staticDef &&
+          patch.name === staticDef.name &&
+          (patch.cost ?? staticDef.cost) === staticDef.cost &&
+          (patch.attack ?? staticDef.attack) === staticDef.attack &&
+          (patch.hp ?? staticDef.hp) === staticDef.hp
+        ) {
+          delete overrides[id];
+          modified = true;
+        }
+      }
+      if (modified) {
+        localStorage.setItem(LS_KEY, JSON.stringify(overrides));
+      }
       applyLocalOverrides(this.cards, overrides);
     } catch {
       // ignore parse errors
@@ -453,8 +500,9 @@ export class CardRepository {
           for (const rawCard of data.cards) {
             const card = normalizeCardRow(rawCard);
             const existing = this.cards.get(card.id);
-            if (shouldIncomingCardOverwrite(card, existing, false)) {
-              const merged = mergeCardSafely(existing, card, { isAuthoritativeRemote: false });
+            const isAuthoritative = (card.updatedAt ?? 0) > 0;
+            if (shouldIncomingCardOverwrite(card, existing, isAuthoritative)) {
+              const merged = mergeCardSafely(existing, card, { isAuthoritativeRemote: isAuthoritative });
               if (merged !== existing) {
                 this.cards.set(card.id, merged);
                 updatedAny = true;
@@ -509,7 +557,8 @@ export class CardRepository {
   public setCatalog(cards: CardMeta[], _heroes?: any[]): void {
     for (const card of cards) {
       const existing = this.cards.get(card.id);
-      const merged = mergeCardSafely(existing, card, { isAuthoritativeRemote: false });
+      const isAuthoritative = (card.updatedAt ?? 0) > 0;
+      const merged = mergeCardSafely(existing, card, { isAuthoritativeRemote: isAuthoritative });
       this.cards.set(card.id, {
         ...merged,
         tribes: merged.tribes && merged.tribes.length > 0 ? merged.tribes : (merged.tribe ? [merged.tribe] : ["เป็นกลาง"]),
