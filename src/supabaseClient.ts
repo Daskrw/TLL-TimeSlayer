@@ -77,6 +77,30 @@ export const STORAGE_BUCKET = "card-art";
 
 // ── Database Operations: Cards ────────────────────────────────
 
+/**
+ * Safely parses timestamps from database rows or API payloads.
+ * Strictly preserves valid 0 values (baseline/seed definitions)
+ * and never replaces them with Date.now() merely because they are falsy.
+ * Fallback is applied only when the timestamp is genuinely null, undefined,
+ * or an unparseable invalid value.
+ */
+export function parseCardTimestamp(val: any, fallback = 0): number {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === "number") {
+    return Number.isFinite(val) ? val : fallback;
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed === "") return fallback;
+    const num = Number(trimmed);
+    if (Number.isFinite(num)) return num;
+    const parsedDate = Date.parse(trimmed);
+    if (!isNaN(parsedDate)) return parsedDate;
+    return fallback;
+  }
+  return fallback;
+}
+
 export function normalizeCardRow(row: any): CardMeta {
   if (!row) {
     return {
@@ -91,7 +115,7 @@ export function normalizeCardRow(row: any): CardMeta {
       keywords: [],
       text: "",
       imageUrl: "",
-      updatedAt: Date.now(),
+      updatedAt: 0,
     };
   }
 
@@ -101,6 +125,8 @@ export function normalizeCardRow(row: any): CardMeta {
   const rawKeywords = Array.isArray(row.keywords) ? row.keywords : [];
   const text = row.text ?? row.description ?? "";
   const imageUrl = row.imageUrl ?? row.image_url ?? "";
+  const rawUpdated = row.updatedAt ?? row.updated_at;
+  const updatedAt = parseCardTimestamp(rawUpdated, 0);
 
   return {
     id: String(row.id || "").trim(),
@@ -114,20 +140,126 @@ export function normalizeCardRow(row: any): CardMeta {
     keywords: rawKeywords,
     text: String(text || ""),
     imageUrl: String(imageUrl || ""),
-    updatedAt: Number(row.updatedAt ?? row.updated_at ?? Date.now()) || Date.now(),
+    updatedAt,
   };
 }
 
-export async function fetchCardsFromSupabase(): Promise<CardMeta[] | null> {
+export interface FetchCardsOptions {
+  batchSize?: number;
+  includeImages?: boolean;
+}
+
+export async function fetchCardsFromSupabase(
+  options: FetchCardsOptions = { batchSize: 1, includeImages: true }
+): Promise<CardMeta[] | null> {
   if (!isSupabaseConfigured) return null;
+  const batchSize = Math.max(1, options.batchSize ?? 1);
+  const includeImages = options.includeImages !== false;
+
   try {
-    const { data, error } = await supabase.from("cards").select("*");
-    if (error) {
-      console.error("[Supabase] Error fetching cards:", error.message, error);
+    // 1. Fetch lightweight card metadata first (bounded payload without multi-megabyte artwork)
+    let metaCols = "id, name, cost, type, attack, hp, tribes, tribe, keywords, text, updatedAt, created_at";
+    let metaRes = await supabase
+      .from("cards")
+      .select(metaCols)
+      .order("id", { ascending: true });
+
+    // Fallback if table was provisioned with snake_case column names
+    if (metaRes.error && (metaRes.error.message?.includes("column") || metaRes.error.code === "PGRST204")) {
+      metaCols = "id, name, cost, type, attack, hp, tribes, tribe, keywords, description, updated_at, created_at";
+      metaRes = await supabase
+        .from("cards")
+        .select(metaCols)
+        .order("id", { ascending: true });
+    }
+
+    if (metaRes.error) {
+      console.error("[Supabase] Error fetching card metadata:", metaRes.error.message, metaRes.error);
       return null;
     }
-    if (!data || !Array.isArray(data)) return [];
-    return data.map((row) => normalizeCardRow(row));
+    if (!metaRes.data || !Array.isArray(metaRes.data)) return [];
+
+    const metaRows = (metaRes.data as unknown as Record<string, any>[]) || [];
+
+    // 2. If artwork hydration is not requested, return metadata immediately
+    if (!includeImages) {
+      return metaRows.map((row) => normalizeCardRow({ ...row, imageUrl: "" }));
+    }
+
+    // 3. Hydrate images in bounded batches so PostgREST statement execution never times out
+    const imageMap = new Map<string, string>();
+    const ids: string[] = metaRows.map((r) => String(r.id || ""));
+
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const chunkIds = ids.slice(i, i + batchSize);
+      let imgRes: { data: any[] | null; error: any } = await supabase
+        .from("cards")
+        .select("id, imageUrl")
+        .in("id", chunkIds);
+
+      // Fallback for snake_case image_url column
+      if (imgRes.error && (imgRes.error.message?.includes("column") || imgRes.error.code === "PGRST204")) {
+        imgRes = await supabase
+          .from("cards")
+          .select("id, image_url")
+          .in("id", chunkIds);
+      }
+
+      if (imgRes.error) {
+        // If a multi-card batch failed (e.g. statement timeout 57014 from accumulated large base64 images),
+        // retry fetching each card individually before declaring failure.
+        if (chunkIds.length > 1) {
+          console.warn(`[Supabase] Batch timed out for [${chunkIds.join(", ")}]. Retrying individual cards...`);
+          let singleFail = false;
+          for (const singleId of chunkIds) {
+            let singleRes: { data: any[] | null; error: any } = await supabase
+              .from("cards")
+              .select("id, imageUrl")
+              .eq("id", singleId);
+            if (singleRes.error && (singleRes.error.message?.includes("column") || singleRes.error.code === "PGRST204")) {
+              singleRes = await supabase.from("cards").select("id, image_url").eq("id", singleId);
+            }
+            if (singleRes.error) {
+              console.error(`[Supabase] Error fetching artwork for card ${singleId}:`, singleRes.error.message);
+              singleFail = true;
+              break;
+            }
+            const singleRow = singleRes.data?.[0];
+            if (singleRow) {
+              const img = singleRow.imageUrl ?? singleRow.image_url ?? "";
+              if (img) imageMap.set(singleId, String(img));
+            }
+          }
+          if (singleFail) {
+            // Requirement: Surface batch failure safely; do not treat partial fetch as complete catalog.
+            return null;
+          }
+        } else {
+          console.error(
+            `[Supabase] Error fetching card artwork for ${chunkIds[0]}:`,
+            imgRes.error.message,
+            imgRes.error
+          );
+          return null;
+        }
+      } else {
+        for (const row of imgRes.data || []) {
+          if (row && typeof row === "object" && "id" in row) {
+            const r = row as Record<string, any>;
+            const img = r.imageUrl ?? r.image_url ?? "";
+            if (img) imageMap.set(String(r.id), String(img));
+          }
+        }
+      }
+    }
+
+    // 4. Combine metadata and artwork into normalized CardMeta records
+    return metaRows.map((row) =>
+      normalizeCardRow({
+        ...row,
+        imageUrl: imageMap.get(String(row.id)) || "",
+      })
+    );
   } catch (err) {
     console.error("[Supabase] Failed to connect to cards table:", err);
     return null;

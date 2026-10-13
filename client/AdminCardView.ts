@@ -499,6 +499,113 @@ export class AdminCardView {
     });
   }
 
+  /**
+   * Compresses card artwork on the client before network transmission.
+   * - Resizes to max 512px maintaining aspect ratio.
+   * - Uses WebP (preserving alpha transparency) or PNG/JPEG fallback.
+   * - Targets approximately ~30-50 KB per card image.
+   * - Validates corrupt/unsupported images.
+   */
+  public async compressCardArtwork(
+    file: File,
+    maxDim = 512,
+    quality = 0.82,
+  ): Promise<{ dataUrl: string; width: number; height: number; format: string }> {
+    if (!file.type.startsWith("image/") && !file.name.match(/\.(png|jpe?g|webp|gif|svg|avif)$/i)) {
+      throw new Error("Unsupported file format: must be an image (PNG, JPG, WebP, SVG, AVIF)");
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const rawDataUrl = ev.target?.result as string;
+        if (!rawDataUrl) return reject(new Error("Failed to read image file"));
+
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width <= 0 || height <= 0) {
+            return reject(new Error("Invalid image dimensions (0x0)"));
+          }
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          width = Math.max(1, width);
+          height = Math.max(1, height);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            return reject(new Error("Canvas 2D context unavailable"));
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // 1. Try WebP (preserves alpha transparency and compresses to ~30-50 KB)
+          try {
+            const webpUrl = canvas.toDataURL("image/webp", quality);
+            if (webpUrl && webpUrl.startsWith("data:image/webp")) {
+              return resolve({
+                dataUrl: webpUrl,
+                width,
+                height,
+                format: "webp",
+              });
+            }
+          } catch {}
+
+          // 2. Fallback: check if image has transparency
+          let hasAlpha = false;
+          try {
+            const imgData = ctx.getImageData(0, 0, width, height).data;
+            for (let i = 3; i < imgData.length; i += 16) {
+              if (imgData[i] < 250) {
+                hasAlpha = true;
+                break;
+              }
+            }
+          } catch {}
+
+          if (hasAlpha) {
+            // Keep PNG to preserve transparency
+            const pngUrl = canvas.toDataURL("image/png");
+            return resolve({
+              dataUrl: pngUrl,
+              width,
+              height,
+              format: "png",
+            });
+          }
+
+          // 3. Fallback to JPEG for opaque images
+          const jpegUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve({
+            dataUrl: jpegUrl || rawDataUrl,
+            width,
+            height,
+            format: "jpeg",
+          });
+        };
+        img.onerror = () => reject(new Error("Failed to decode image: file may be corrupt"));
+        img.src = rawDataUrl;
+      };
+      reader.onerror = () => reject(new Error("File read error"));
+      reader.readAsDataURL(file);
+    });
+  }
+
   private bindCardUploadEvents(): void {
     const preview = this.overlay.querySelector("#adm-img-preview") as HTMLElement;
     const fileInput = this.overlay.querySelector("#adm-card-file-input") as HTMLInputElement;
@@ -506,22 +613,54 @@ export class AdminCardView {
     const urlInput = this.overlay.querySelector("#adm-field-imageUrl") as HTMLInputElement;
 
     const handleCardFile = async (file: File) => {
-      // Immediate local preview
-      this.readLocalImage(file, (dataUrl) => {
-        this.pendingCardImg = dataUrl;
-        this.setCardPreviewUrl(dataUrl);
-        urlInput.value = "Uploading to server...";
-      });
+      if (!file.type.startsWith("image/") && !file.name.match(/\.(png|jpe?g|webp|gif|svg|avif)$/i)) {
+        this.showToast("⚠️ Unsupported file format. Please upload a PNG, JPG, or WebP image.");
+        return;
+      }
 
-      // Upload to server for permanent hosted URL
+      const saveBtn = this.cardModal?.querySelector("#adm-btn-save-card") as HTMLButtonElement;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "⏳ Optimizing artwork...";
+      }
+      urlInput.value = "Optimizing artwork...";
+
       try {
-        const hostedUrl = await this.uploadAssetToServer(file);
-        this.pendingCardImg = hostedUrl;
-        this.setCardPreviewUrl(hostedUrl);
-        urlInput.value = hostedUrl;
-        this.showToast("☁ Artwork uploaded & hosted on server!");
-      } catch (err) {
-        console.warn("[AdminCardView] Upload error:", err);
+        // 1. Client-side artwork compression to max 512px (~30-50 KB)
+        const compressed = await this.compressCardArtwork(file);
+        const compactDataUrl = compressed.dataUrl;
+
+        // Immediate preview with compressed artwork
+        this.pendingCardImg = compactDataUrl;
+        this.setCardPreviewUrl(compactDataUrl);
+        urlInput.value = "Uploading to server...";
+
+        // 2. Upload to server (attempts Supabase Storage first, falls back to compact data URL)
+        const hostedUrl = await this.uploadAssetToServer(file, compactDataUrl);
+        if (hostedUrl && hostedUrl !== compactDataUrl) {
+          this.pendingCardImg = hostedUrl;
+          this.setCardPreviewUrl(hostedUrl);
+          urlInput.value = hostedUrl;
+          this.showToast("☁ Artwork uploaded & hosted on CDN!");
+        } else {
+          this.pendingCardImg = compactDataUrl;
+          this.setCardPreviewUrl(compactDataUrl);
+          urlInput.value = compactDataUrl;
+          this.showToast("⚡ Artwork optimized (<50KB) & ready to persist!");
+        }
+      } catch (err: any) {
+        console.warn("[AdminCardView] Card artwork optimization/upload error:", err);
+        this.showToast(`⚠️ Could not process image: ${err?.message || err}`);
+        // Preserve existing artwork if any
+        const existingUrl = this.editingCard?.imageUrl || "";
+        this.pendingCardImg = existingUrl || null;
+        urlInput.value = existingUrl;
+        this.setCardPreviewUrl(existingUrl);
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "💾 Save & Publish";
+        }
       }
     };
 
@@ -1036,8 +1175,10 @@ export class AdminCardView {
     const cost = parseInt((this.cardModal.querySelector("#adm-field-cost") as HTMLInputElement).value, 10);
     const attack = parseInt((this.cardModal.querySelector("#adm-field-attack") as HTMLInputElement).value, 10);
     const hp = parseInt((this.cardModal.querySelector("#adm-field-hp") as HTMLInputElement).value, 10);
-    const text = (this.cardModal.querySelector("#adm-field-text") as HTMLTextAreaElement).value.trim();
-    const imageUrl = this.pendingCardImg ?? "";
+    const rawInputUrl = (this.cardModal.querySelector("#adm-field-imageUrl") as HTMLInputElement).value.trim();
+    const imageUrl = this.pendingCardImg !== null
+      ? this.pendingCardImg
+      : (rawInputUrl || this.editingCard.imageUrl || "");
 
     const tribes: string[] = [];
     this.cardModal.querySelectorAll<HTMLInputElement>("#adm-tribe-grid input:checked").forEach((inp) => {

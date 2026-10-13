@@ -38,8 +38,85 @@ const STATIC_COLLECTIBLE: CardDefinition[] = StaticCards.ALL_STATIC_CARDS;
 const LS_KEY = "CARD_GAME_CARD_OVERRIDES";
 
 // ─────────────────────────────────────────────────────────────
-//  CardRepository (Singleton)
+//  Conflict Resolution & Sync Hardening Rules
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Evaluates whether an incoming card record should overwrite an existing record.
+ * Rules:
+ *  1. A seed/default record with updatedAt === 0 CANNOT overwrite an existing record with updatedAt > 0.
+ *  2. Fallback seed data must not overwrite valid edited stats, effects, names, or fields.
+ *  3. LWW timestamp comparison: if incoming is older than existing, reject.
+ *  4. Fallback data (isAuthoritativeRemote === false) cannot overwrite existing records with equal or newer timestamps.
+ */
+export function shouldIncomingCardOverwrite(
+  incoming: CardMeta,
+  existing: CardMeta | undefined,
+  isAuthoritativeRemote = false,
+): boolean {
+  if (!existing) return true;
+
+  const existingUpdated = existing.updatedAt ?? 0;
+  const incomingUpdated = incoming.updatedAt ?? 0;
+
+  // Rule 1: A seed/default record with updatedAt: 0 cannot overwrite an edited record with updatedAt > 0
+  if (incomingUpdated === 0 && existingUpdated > 0) {
+    return false;
+  }
+
+  // Rule 2: If incoming is fallback data (e.g. /api/catalog fallback or static seed):
+  // Never overwrite an existing record that has updatedAt > 0 or has local edits
+  if (!isAuthoritativeRemote) {
+    if (existingUpdated > 0) {
+      return false;
+    }
+    if (incomingUpdated < existingUpdated) {
+      return false;
+    }
+  }
+
+  // Rule 3: LWW timestamp comparison
+  if (incomingUpdated > 0 && existingUpdated > 0 && incomingUpdated < existingUpdated) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Safely merges incoming card metadata into an existing card definition.
+ * Enforces image preservation:
+ *  - Fallback data or incomplete records must NEVER replace a non-empty existing image with an empty image.
+ */
+export function mergeCardSafely(
+  existing: CardMeta | undefined,
+  incoming: CardMeta,
+  options: { isAuthoritativeRemote?: boolean } = {},
+): CardMeta {
+  if (!existing) {
+    return { ...incoming };
+  }
+
+  const { isAuthoritativeRemote = false } = options;
+  const canOverwrite = shouldIncomingCardOverwrite(incoming, existing, isAuthoritativeRemote);
+
+  if (!canOverwrite) {
+    return existing;
+  }
+
+  // Incoming is eligible to overwrite.
+  // Rule: An existing non-empty image must never be wiped out by an empty incoming image
+  const resolvedImageUrl =
+    incoming.imageUrl && incoming.imageUrl.trim() !== ""
+      ? incoming.imageUrl
+      : (existing.imageUrl || "");
+
+  return {
+    ...existing,
+    ...incoming,
+    imageUrl: resolvedImageUrl,
+  };
+}
 
 export type ChangeListener = (cards: Map<string, CardMeta>) => void;
 
@@ -87,7 +164,9 @@ export class CardRepository {
             console.log("[CardRepository] Realtime card change received from Supabase:", payload.eventType);
             if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
               const row = normalizeCardRow(payload.new);
-              this.cards.set(row.id, row);
+              const existing = this.cards.get(row.id);
+              const merged = mergeCardSafely(existing, row, { isAuthoritativeRemote: true });
+              this.cards.set(row.id, merged);
               this.persistLocalOverrides();
               this.notify();
             } else if (payload.eventType === "DELETE") {
@@ -189,31 +268,46 @@ export class CardRepository {
       const supabaseCards = await fetchCardsFromSupabase();
       if (supabaseCards && supabaseCards.length > 0) {
         for (const row of supabaseCards) {
-          this.cards.set(row.id, row);
+          const existing = this.cards.get(row.id);
+          const merged = mergeCardSafely(existing, row, { isAuthoritativeRemote: true });
+          this.cards.set(row.id, merged);
         }
         this.persistLocalOverrides();
         console.log(`[CardRepository] Loaded ${supabaseCards.length} authoritative cards from Supabase PostgreSQL`);
         return;
       }
+      if (supabaseCards === null) {
+        console.warn("[CardRepository] Supabase fetch returned null (error or timeout); preserving existing cards.");
+      }
     } catch (err) {
       console.error("[CardRepository] Supabase fetchRemote error:", err);
     }
 
-    // 2. Try Node.js Backend REST API
+    // 2. Try Node.js Backend REST API (Fallback source)
     try {
-      const response = await fetch("/api/catalog");
+      const endpoint = typeof window !== "undefined"
+        ? "/api/catalog"
+        : `http://localhost:${(typeof process !== "undefined" && process?.env?.PORT) || 3000}/api/catalog`;
+      const response = await fetch(endpoint);
       if (response.ok) {
         const data = await response.json();
-        if (data.cards && Array.isArray(data.cards)) {
+        if (data.cards && Array.isArray(data.cards) && data.cards.length > 0) {
+          let updatedAny = false;
           for (const rawCard of data.cards) {
             const card = normalizeCardRow(rawCard);
             const existing = this.cards.get(card.id);
-            if (!existing || (card.updatedAt && card.updatedAt >= (existing.updatedAt || 0))) {
-              this.cards.set(card.id, card);
+            if (shouldIncomingCardOverwrite(card, existing, false)) {
+              const merged = mergeCardSafely(existing, card, { isAuthoritativeRemote: false });
+              if (merged !== existing) {
+                this.cards.set(card.id, merged);
+                updatedAny = true;
+              }
             }
           }
-          this.persistLocalOverrides();
-          console.log(`[CardRepository] Synced ${data.cards.length} cards from Backend Master Registry`);
+          if (updatedAny) {
+            this.persistLocalOverrides();
+          }
+          console.log(`[CardRepository] Processed ${data.cards.length} cards from Backend Master Registry fallback`);
         }
       }
     } catch (err) {
@@ -254,10 +348,12 @@ export class CardRepository {
 
   public setCatalog(cards: CardMeta[], _heroes?: any[]): void {
     for (const card of cards) {
+      const existing = this.cards.get(card.id);
+      const merged = mergeCardSafely(existing, card, { isAuthoritativeRemote: false });
       this.cards.set(card.id, {
-        ...card,
-        tribes: card.tribes && card.tribes.length > 0 ? card.tribes : (card.tribe ? [card.tribe] : ["เป็นกลาง"]),
-        tribe: card.tribe || card.tribes?.[0] || "เป็นกลาง",
+        ...merged,
+        tribes: merged.tribes && merged.tribes.length > 0 ? merged.tribes : (merged.tribe ? [merged.tribe] : ["เป็นกลาง"]),
+        tribe: merged.tribe || merged.tribes?.[0] || "เป็นกลาง",
       });
     }
     this.persistLocalOverrides();

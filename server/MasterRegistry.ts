@@ -297,22 +297,45 @@ export class MasterRegistry {
   public async syncFromSupabase(): Promise<void> {
     if (!isSupabaseConfigured) return;
     try {
+      let anyUpdated = false;
       const heroes = await fetchHeroesFromSupabase();
       if (heroes && heroes.length > 0) {
         for (const h of heroes) {
           this.heroesMap.set(h.id, h);
         }
+        anyUpdated = true;
         console.log(`[MasterRegistry] Synced ${heroes.length} heroes from Supabase database.`);
       }
+
       const cards = await fetchCardsFromSupabase();
       if (cards && cards.length > 0) {
         for (const c of cards) {
-          this.cardsMap.set(c.id, c);
+          const existing = this.cardsMap.get(c.id);
+          // Protection: seed/default records (updatedAt: 0) cannot overwrite edited records (updatedAt > 0)
+          if (existing && (existing.updatedAt || 0) > 0 && (c.updatedAt || 0) === 0) {
+            continue;
+          }
+          // Protection: preserve existing non-empty imageUrl if incoming has empty image
+          const resolvedImageUrl =
+            c.imageUrl && c.imageUrl.trim() !== ""
+              ? c.imageUrl
+              : (existing?.imageUrl || "");
+
+          this.cardsMap.set(c.id, {
+            ...c,
+            imageUrl: resolvedImageUrl,
+          });
         }
+        anyUpdated = true;
         console.log(`[MasterRegistry] Synced ${cards.length} cards from Supabase database.`);
+      } else if (cards === null) {
+        console.warn("[MasterRegistry] Supabase card fetch returned null or timed out. Preserving existing card registry.");
       }
-      this.updatedAt = Date.now();
-      this.saveToFile();
+
+      if (anyUpdated) {
+        this.updatedAt = Date.now();
+        this.saveToFile();
+      }
     } catch (err) {
       console.warn("[MasterRegistry] Supabase sync warning:", err);
     }
