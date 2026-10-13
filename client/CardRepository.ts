@@ -35,7 +35,141 @@ const STATIC_COLLECTIBLE: CardDefinition[] = StaticCards.ALL_STATIC_CARDS;
 //  Persistence Key (Offline / Cache Fallback)
 // ─────────────────────────────────────────────────────────────
 
-const LS_KEY = "CARD_GAME_CARD_OVERRIDES";
+// ─────────────────────────────────────────────────────────────
+//  Persistence Key & Storage Quota Boundaries
+// ─────────────────────────────────────────────────────────────
+
+export const LS_KEY = "CARD_GAME_CARD_OVERRIDES";
+
+/**
+ * Maximum string length for an image URL permitted into localStorage.
+ * Standard browser localStorage quotas are ~5 MB across the entire origin.
+ * Large base64 data URIs (e.g. 3-4 MB per card across 8 cards = ~26 MB) will exceed this quota.
+ * Hosted URLs (https://..., /uploads/...) or tiny thumbnails <= 64 KB are permitted.
+ */
+export const MAX_LOCAL_STORAGE_IMAGE_LEN = 65536;
+
+export function isCompactImageUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.length <= MAX_LOCAL_STORAGE_IMAGE_LEN;
+}
+
+export function buildLocalOverridesPayload(
+  cards: Iterable<[string, CardMeta]>
+): Record<string, Partial<CardMeta>> {
+  const overrides: Record<string, Partial<CardMeta>> = {};
+  for (const [id, meta] of cards) {
+    if (meta.imageUrl || (meta.updatedAt !== undefined && meta.updatedAt > 0)) {
+      const entry: Partial<CardMeta> = {
+        updatedAt: meta.updatedAt,
+        name: meta.name,
+        cost: meta.cost,
+        type: meta.type,
+        attack: meta.attack,
+        hp: meta.hp,
+        tribes: meta.tribes ? [...meta.tribes] : (meta.tribe ? [meta.tribe] : ["เป็นกลาง"]),
+        tribe: meta.tribe || (meta.tribes?.[0] ?? "เป็นกลาง"),
+        keywords: Array.isArray(meta.keywords) ? [...meta.keywords] : [],
+        ...(meta.text !== undefined ? { text: meta.text } : {}),
+      };
+      // Only include compact image URLs (e.g. CDN URLs, hosted paths, small thumbnails <= 64KB).
+      // Large base64 artwork (> 64KB) is excluded to avoid QuotaExceededError in localStorage.
+      if (isCompactImageUrl(meta.imageUrl)) {
+        entry.imageUrl = meta.imageUrl;
+      }
+      overrides[id] = entry;
+    }
+  }
+  return overrides;
+}
+
+export function applyLocalOverrides(
+  cards: Map<string, CardMeta>,
+  overrides: Record<string, Partial<CardMeta>>
+): void {
+  for (const [id, patch] of Object.entries(overrides)) {
+    const existing = cards.get(id);
+    if (existing) {
+      const { imageUrl, ...metadata } = patch;
+      Object.assign(existing, metadata);
+      // Strictly preserve existing non-empty image if patch does not provide a non-empty image
+      if (imageUrl && imageUrl.trim() !== "") {
+        existing.imageUrl = imageUrl;
+      }
+    } else {
+      cards.set(id, {
+        ...patch,
+        imageUrl: patch.imageUrl || "",
+      } as CardMeta);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Targeted IndexedDB Offline Artwork Cache
+// ─────────────────────────────────────────────────────────────
+
+const IDB_NAME = "tll_artwork_store";
+const IDB_STORE = "artwork";
+
+function openArtworkDB(): Promise<IDBDatabase | null> {
+  if (typeof window === "undefined" || !window.indexedDB) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function saveArtworkToIDB(id: string, imageUrl: string): Promise<void> {
+  if (!id || !imageUrl || typeof window === "undefined" || !window.indexedDB) return;
+  try {
+    const db = await openArtworkDB();
+    if (!db) return;
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(imageUrl, id);
+  } catch {
+    // Non-fatal: IndexedDB write failure should never block application
+  }
+}
+
+export async function loadArtworkFromIDB(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (typeof window === "undefined" || !window.indexedDB) return map;
+  try {
+    const db = await openArtworkDB();
+    if (!db) return map;
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          map.set(cursor.key as string, cursor.value as string);
+          cursor.continue();
+        } else {
+          resolve(map);
+        }
+      };
+      req.onerror = () => resolve(map);
+    });
+  } catch {
+    return map;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 //  Conflict Resolution & Sync Hardening Rules
@@ -167,6 +301,9 @@ export class CardRepository {
               const existing = this.cards.get(row.id);
               const merged = mergeCardSafely(existing, row, { isAuthoritativeRemote: true });
               this.cards.set(row.id, merged);
+              if (merged.imageUrl && !isCompactImageUrl(merged.imageUrl)) {
+                saveArtworkToIDB(merged.id, merged.imageUrl);
+              }
               this.persistLocalOverrides();
               this.notify();
             } else if (payload.eventType === "DELETE") {
@@ -202,6 +339,21 @@ export class CardRepository {
     // 2. Read cached overrides from localStorage for instantaneous first render
     this.mergeLocalOverrides();
 
+    // 2b. Hydrate artwork from targeted IndexedDB cache if available (offline-safe)
+    try {
+      const cachedArt = await loadArtworkFromIDB();
+      if (cachedArt && cachedArt.size > 0) {
+        for (const [id, art] of cachedArt) {
+          const existing = this.cards.get(id);
+          if (existing && (!existing.imageUrl || existing.imageUrl.trim() === "")) {
+            existing.imageUrl = art;
+          }
+        }
+      }
+    } catch {
+      // Non-fatal IDB read failure
+    }
+
     // 3. Fetch authoritative catalog from Supabase & Backend REST
     try {
       await this.fetchRemote();
@@ -218,17 +370,11 @@ export class CardRepository {
 
   private mergeLocalOverrides(): void {
     try {
+      if (typeof localStorage === "undefined") return;
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return;
       const overrides = JSON.parse(raw) as Record<string, Partial<CardMeta>>;
-      for (const [id, patch] of Object.entries(overrides)) {
-        const existing = this.cards.get(id);
-        if (existing) {
-          Object.assign(existing, patch);
-        } else {
-          this.cards.set(id, patch as CardMeta);
-        }
-      }
+      applyLocalOverrides(this.cards, overrides);
     } catch {
       // ignore parse errors
     }
@@ -236,24 +382,8 @@ export class CardRepository {
 
   private persistLocalOverrides(): void {
     try {
-      const overrides: Record<string, Partial<CardMeta>> = {};
-      for (const [id, meta] of this.cards) {
-        if (meta.imageUrl || meta.updatedAt > 0) {
-          const entry: Partial<CardMeta> = {
-            imageUrl: meta.imageUrl,
-            updatedAt: meta.updatedAt,
-            name: meta.name,
-            cost: meta.cost,
-            attack: meta.attack,
-            hp: meta.hp,
-            tribes: meta.tribes ? [...meta.tribes] : (meta.tribe ? [meta.tribe] : ["เป็นกลาง"]),
-            tribe: meta.tribe || (meta.tribes?.[0] ?? "เป็นกลาง"),
-            keywords: [...meta.keywords],
-            ...(meta.text !== undefined ? { text: meta.text } : {}),
-          };
-          overrides[id] = entry;
-        }
-      }
+      if (typeof localStorage === "undefined") return;
+      const overrides = buildLocalOverridesPayload(this.cards);
       localStorage.setItem(LS_KEY, JSON.stringify(overrides));
     } catch (err) {
       console.warn("[CardRepository] Failed to write localStorage cache:", err);
@@ -271,6 +401,9 @@ export class CardRepository {
           const existing = this.cards.get(row.id);
           const merged = mergeCardSafely(existing, row, { isAuthoritativeRemote: true });
           this.cards.set(row.id, merged);
+          if (row.imageUrl && !isCompactImageUrl(row.imageUrl)) {
+            saveArtworkToIDB(row.id, row.imageUrl);
+          }
         }
         this.persistLocalOverrides();
         console.log(`[CardRepository] Loaded ${supabaseCards.length} authoritative cards from Supabase PostgreSQL`);
@@ -278,6 +411,8 @@ export class CardRepository {
       }
       if (supabaseCards === null) {
         console.warn("[CardRepository] Supabase fetch returned null (error or timeout); preserving existing cards.");
+      } else if (supabaseCards.length === 0) {
+        console.warn("[CardRepository] Supabase returned 0 cards; preserving existing cards.");
       }
     } catch (err) {
       console.error("[CardRepository] Supabase fetchRemote error:", err);
@@ -301,6 +436,9 @@ export class CardRepository {
               if (merged !== existing) {
                 this.cards.set(card.id, merged);
                 updatedAny = true;
+                if (merged.imageUrl && !isCompactImageUrl(merged.imageUrl)) {
+                  saveArtworkToIDB(merged.id, merged.imageUrl);
+                }
               }
             }
           }
@@ -355,6 +493,9 @@ export class CardRepository {
         tribes: merged.tribes && merged.tribes.length > 0 ? merged.tribes : (merged.tribe ? [merged.tribe] : ["เป็นกลาง"]),
         tribe: merged.tribe || merged.tribes?.[0] || "เป็นกลาง",
       });
+      if (merged.imageUrl && !isCompactImageUrl(merged.imageUrl)) {
+        saveArtworkToIDB(merged.id, merged.imageUrl);
+      }
     }
     this.persistLocalOverrides();
     this.notify();
@@ -412,6 +553,9 @@ export class CardRepository {
 
     this.cards.set(id, updated);
     this.persistLocalOverrides();
+    if (updated.imageUrl && !isCompactImageUrl(updated.imageUrl)) {
+      saveArtworkToIDB(id, updated.imageUrl);
+    }
     const ok = await this.pushRemote(updated);
     this.notify();
     return ok;
@@ -421,6 +565,9 @@ export class CardRepository {
     meta.updatedAt = Date.now();
     this.cards.set(meta.id, meta);
     this.persistLocalOverrides();
+    if (meta.imageUrl && !isCompactImageUrl(meta.imageUrl)) {
+      saveArtworkToIDB(meta.id, meta.imageUrl);
+    }
     const ok = await this.pushRemote(meta);
     this.notify();
     return ok;
